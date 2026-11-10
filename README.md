@@ -30,6 +30,13 @@ bash install.sh
 
 Install ke time ek **password** puchega — wahi aapka login hoga. Bas, ho gaya! 🎉
 
+> ⚠️ Password type karte time **screen pe kuch nahi dikhega** (na `\*\*\*`, na cursor hilta hai) — ye security feature hai. Type karo aur Enter dabao.
+>
+> 💡 Non-interactive install chahiye (script/automation ke liye)?
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/siddhantpashte123-hub/cloud/main/install.sh | MYCLOUD_PASSWORD='apna-password' bash
+> ```
+
 Phir browser kholo: **`http://YOUR_VPS_IP:1919`**
 
 ---

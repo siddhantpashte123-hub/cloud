@@ -104,15 +104,36 @@ cmd_install() {
   # ---- password ----
   echo ""
   echo "🔒 Ek strong password banao — yahi aapka login hoga."
-  echo "   (type karte time dikhega nahi, confirm bhi karna hai)"
-  while true; do
-    read -rsp "   Password daalo: " PW1; echo
-    read -rsp "   Password dobara: " PW2; echo
-    if [ -z "$PW1" ]; then err "Password khali nahi ho sakta."; continue; fi
-    if [ "${#PW1}" -lt 4 ]; then err "Password kam se kam 4 character ka rakho."; continue; fi
-    if [ "$PW1" != "$PW2" ]; then err "Dono password match nahi hue. Dobara try karo."; continue; fi
-    break
-  done
+  echo "   (type karte time dikhega nahi — ye normal hai, type karo aur Enter dabao)"
+  if [ -n "${MYCLOUD_PASSWORD:-}" ]; then
+    PW1="$MYCLOUD_PASSWORD"; PW2="$MYCLOUD_PASSWORD"
+    [ "${#PW1}" -lt 4 ] && { err "MYCLOUD_PASSWORD kam se kam 4 character ka hona chahiye."; exit 1; }
+    info "Password MYCLOUD_PASSWORD env se liya."
+  else
+    # curl|bash se chalane par stdin pipe hota hai — input terminal (/dev/tty) se lo
+    local PW_IN=/dev/stdin
+    if [ ! -t 0 ] && [ -e /dev/tty ]; then PW_IN=/dev/tty; fi
+    while true; do
+      if ! read -rsp "   Password daalo: " PW1 < "$PW_IN"; then
+        echo ""
+        err "Password read nahi ho paya — interactive terminal nahi mila."
+        err "Aise chalao:  git clone https://github.com/siddhantpashte123-hub/cloud.git && cd cloud && ./cloud install"
+        err "Ya non-interactive:  MYCLOUD_PASSWORD='apna-password' bash install.sh"
+        exit 1
+      fi
+      echo ""
+      if ! read -rsp "   Password dobara: " PW2 < "$PW_IN"; then
+        echo ""
+        err "Password read nahi ho paya — interactive terminal nahi mila."
+        exit 1
+      fi
+      echo ""
+      if [ -z "$PW1" ]; then err "Password khali nahi ho sakta."; continue; fi
+      if [ "${#PW1}" -lt 4 ]; then err "Password kam se kam 4 character ka rakho."; continue; fi
+      if [ "$PW1" != "$PW2" ]; then err "Dono password match nahi hue. Dobara try karo."; continue; fi
+      break
+    done
+  fi
   # hash bana ke config save karo (python helper)
   PW1="$PW1" CONFIG_FILE="$CONFIG_FILE" DATA_DIR="$DATA_DIR" PORT="$PORT" python3 - <<'PY'
 import hashlib, json, os, secrets
