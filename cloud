@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+# ============================================================
+#  MyCloud — Private Storage CLI
+#  Usage:
+#    ./cloud            -> menu (1 Install, 2 Uninstall, 3 Status...)
+#    ./cloud install
+#    ./cloud uninstall
+#    ./cloud status
+#    ./cloud start | stop | restart | password | logs
+#  No Docker. Sirf Python 3 chahiye.
+# ============================================================
+set -u
+
+# ---------- paths ----------
+if [ "$(id -u)" -eq 0 ]; then
+  INSTALL_DIR="${MYCLOUD_DIR:-/opt/mycloud}"
+else
+  INSTALL_DIR="${MYCLOUD_DIR:-$HOME/.mycloud}"
+fi
+DATA_DIR="$INSTALL_DIR/data"
+CONFIG_FILE="$INSTALL_DIR/config.json"
+PID_FILE="$INSTALL_DIR/server.pid"
+LOG_FILE="$INSTALL_DIR/server.log"
+SERVER_PY="$INSTALL_DIR/server.py"
+PORT="${MYCLOUD_PORT:-1919}"
+SERVICE_NAME="mycloud"
+REPO_RAW="https://raw.githubusercontent.com/siddhantpashte123-hub/cloud/main"
+
+# ---------- colors ----------
+if [ -t 1 ]; then
+  R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;36m'; N='\033[0m'
+else
+  R=''; G=''; Y=''; B=''; N=''
+fi
+ok()   { echo -e "${G}✔${N} $*"; }
+warn() { echo -e "${Y}⚠${N} $*"; }
+err()  { echo -e "${R}✘${N} $*"; }
+info() { echo -e "${B}ℹ${N} $*"; }
+
+# ---------- helpers ----------
+has_systemd() {
+  command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]
+}
+is_running() {
+  if has_systemd && systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then return 0; fi
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then return 0; fi
+  return 1
+}
+get_pid() {
+  if [ -f "$PID_FILE" ]; then cat "$PID_FILE" 2>/dev/null; fi
+}
+ensure_python() {
+  if command -v python3 >/dev/null 2>&1; then return 0; fi
+  warn "Python3 nahi mila — install kar raha hoon..."
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -qq && apt-get install -y -qq python3
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y python3
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache python3
+  else
+    err "Python3 install nahi ho paya. Khud install karo: https://www.python.org/downloads/"
+    return 1
+  fi
+  command -v python3 >/dev/null 2>&1
+}
+fetch_server() {
+  # local file (repo clone) ya GitHub se download
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "$script_dir/server.py" ]; then
+    cp "$script_dir/server.py" "$SERVER_PY"
+    ok "server.py copy ho gaya (local)"
+  elif [ -f "./server.py" ]; then
+    cp "./server.py" "$SERVER_PY"
+    ok "server.py copy ho gaya"
+  else
+    info "GitHub se server.py download kar raha hoon..."
+    curl -fsSL "$REPO_RAW/server.py" -o "$SERVER_PY" && ok "server.py download ho gaya"
+  fi
+  # cloud CLI bhi copy karo taaki baad me 'cloud' command kaam kare
+  if [ -f "$script_dir/cloud" ] && [ "$script_dir/cloud" != "$INSTALL_DIR/cloud" ]; then
+    cp "$script_dir/cloud" "$INSTALL_DIR/cloud" 2>/dev/null || true
+    chmod +x "$INSTALL_DIR/cloud" 2>/dev/null || true
+  fi
+}
+public_ip() {
+  curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || echo "YOUR_VPS_IP"
+}
+
+# ============================================================
+#  INSTALL
+# ============================================================
+cmd_install() {
+  echo "========================================"
+  echo "   ☁️  MyCloud Install — Private Storage"
+  echo "========================================"
+  echo ""
+  ensure_python || exit 1
+  mkdir -p "$INSTALL_DIR" "$DATA_DIR"
+  fetch_server || { err "server.py nahi mil paya"; exit 1; }
+  chmod +x "$SERVER_PY"
+
+  # ---- password ----
+  echo ""
+  echo "🔒 Ek strong password banao — yahi aapka login hoga."
+  echo "   (type karte time dikhega nahi, confirm bhi karna hai)"
+  while true; do
+    read -rsp "   Password daalo: " PW1; echo
+    read -rsp "   Password dobara: " PW2; echo
+    if [ -z "$PW1" ]; then err "Password khali nahi ho sakta."; continue; fi
+    if [ "${#PW1}" -lt 4 ]; then err "Password kam se kam 4 character ka rakho."; continue; fi
+    if [ "$PW1" != "$PW2" ]; then err "Dono password match nahi hue. Dobara try karo."; continue; fi
+    break
+  done
+  # hash bana ke config save karo (python helper)
+  PW1="$PW1" CONFIG_FILE="$CONFIG_FILE" DATA_DIR="$DATA_DIR" PORT="$PORT" python3 - <<'PY'
+import hashlib, json, os, secrets
+pw = os.environ["PW1"]
+salt = secrets.token_bytes(16)
+dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
+cfg = {"salt": salt.hex(), "hash": dk.hex(), "port": int(os.environ["PORT"]),
+       "data": os.environ["DATA_DIR"], "version": "1.0.0"}
+with open(os.environ["CONFIG_FILE"], "w") as f:
+    json.dump(cfg, f, indent=2)
+os.chmod(os.environ["CONFIG_FILE"], 0o600)
+PY
+  ok "Password set ho gaya (hashed, safe)"
+
+  # ---- service / start ----
+  if has_systemd && [ "$(id -u)" -eq 0 ]; then
+    info "systemd service bana raha hoon (boot pe auto-start)..."
+    cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
+[Unit]
+Description=MyCloud Private Storage
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 $SERVER_PY --port $PORT --data $DATA_DIR --config $CONFIG_FILE
+Restart=on-failure
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now "$SERVICE_NAME" >/dev/null 2>&1
+    ok "systemd service chal raha hai"
+  else
+    info "nohup se start kar raha hoon..."
+    nohup python3 "$SERVER_PY" --port "$PORT" --data "$DATA_DIR" --config "$CONFIG_FILE" >"$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    ok "Server start ho gaya (PID $(cat "$PID_FILE"))"
+  fi
+
+  # ---- firewall (best effort) ----
+  if command -v ufw >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+    ufw allow "$PORT/tcp" >/dev/null 2>&1 && ok "Firewall: port $PORT open kar diya (ufw)"
+  elif command -v firewall-cmd >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+    firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1 && firewall-cmd --reload >/dev/null 2>&1 && ok "Firewall: port $PORT open kar diya (firewalld)"
+  else
+    warn "Firewall khud check kar lena — port $PORT open hona chahiye."
+  fi
+
+  sleep 1
+  local ip
+  ip="$(public_ip)"
+  echo ""
+  echo "========================================"
+  echo -e "  ${G}🎉 Install complete!${N}"
+  echo "========================================"
+  echo "  🌐 Browser kholo:  http://$ip:$PORT"
+  echo "  🔒 Login: aapka password"
+  echo "  📁 Files yahan save hongi: $DATA_DIR"
+  echo ""
+  echo "  Commands:"
+  echo "    cloud status     -> server chal raha hai ya nahi"
+  echo "    cloud stop       -> server band karo"
+  echo "    cloud start      -> server chalu karo"
+  echo "    cloud password   -> password badlo"
+  echo "    cloud uninstall  -> sab hata do"
+  echo ""
+  cmd_status
+}
+
+# ============================================================
+#  UNINSTALL
+# ============================================================
+cmd_uninstall() {
+  echo "========================================"
+  echo "   🗑  MyCloud Uninstall"
+  echo "========================================"
+  cmd_stop >/dev/null 2>&1 || true
+  if has_systemd && [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+    systemctl disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    ok "systemd service hata diya"
+  fi
+  # data rakhe ya delete?
+  if [ -d "$DATA_DIR" ]; then
+    echo ""
+    warn "Aapki files yahan hain: $DATA_DIR"
+    read -rp "   Files bhi delete kar dun? [y/N] " ans
+    case "$ans" in
+      y|Y|yes|YES)
+        rm -rf "$INSTALL_DIR"
+        ok "Files + app dono delete ho gaye. Bye! 👋"
+        ;;
+      *)
+        rm -rf "$INSTALL_DIR/server.py" "$INSTALL_DIR/cloud" "$INSTALL_DIR/config.json" "$PID_FILE" "$LOG_FILE"
+        ok "App hata diya. Files safe hain: $DATA_DIR"
+        ;;
+    esac
+  else
+    rm -rf "$INSTALL_DIR"
+    ok "MyCloud uninstall ho gaya. Bye! 👋"
+  fi
+}
+
+# ============================================================
+#  STATUS / START / STOP / RESTART
+# ============================================================
+cmd_status() {
+  echo "========================================"
+  echo "   ☁️  MyCloud Status"
+  echo "========================================"
+  if is_running; then
+    ok "Server CHAL RAHA hai ✅"
+    local pid; pid="$(get_pid)"
+    [ -n "$pid" ] && echo "   PID: $pid"
+    if has_systemd && systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+      echo "   Service: systemd (auto-start ON)"
+    else
+      echo "   Service: nohup (background)"
+    fi
+  elif curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    ok "Server CHAL RAHA hai ✅ (port check)"
+  else
+    err "Server BAND hai ❌  ->  'cloud start' chalao"
+  fi
+  # port check
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnp 2>/dev/null | grep -q ":$PORT " && ok "Port $PORT listening hai" || warn "Port $PORT pe kuch nahi sun raha"
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -tlnp 2>/dev/null | grep -q ":$PORT " && ok "Port $PORT listening hai" || warn "Port $PORT pe kuch nahi sun raha"
+  fi
+  # http check
+  if curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    ok "HTTP check pass — browser me khul jayega"
+  else
+    warn "HTTP check fail — log dekho: cloud logs"
+  fi
+  [ -f "$CONFIG_FILE" ] && ok "Config: $CONFIG_FILE" || warn "Config nahi mila (install nahi hua?)"
+  if [ -d "$DATA_DIR" ]; then
+    local used count
+    used="$(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)"
+    count="$(find "$DATA_DIR" -type f 2>/dev/null | wc -l)"
+    echo "   Data: $used used • $count files • $DATA_DIR"
+  fi
+  echo "   URL: http://$(public_ip):$PORT"
+}
+
+cmd_start() {
+  if is_running; then ok "Server pehle se chal raha hai"; return 0; fi
+  [ -f "$SERVER_PY" ] || { err "Install nahi hua. Pehle: cloud install"; exit 1; }
+  if has_systemd && [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+    systemctl start "$SERVICE_NAME" && ok "Server start ho gaya (systemd)"
+  else
+    nohup python3 "$SERVER_PY" --port "$PORT" --data "$DATA_DIR" --config "$CONFIG_FILE" >"$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    ok "Server start ho gaya (PID $(cat "$PID_FILE"))"
+  fi
+  sleep 1; cmd_status
+}
+
+cmd_stop() {
+  if has_systemd && systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl stop "$SERVICE_NAME" && ok "Server band ho gaya (systemd)"
+  elif [ -f "$PID_FILE" ]; then
+    local pid; pid="$(cat "$PID_FILE" 2>/dev/null)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" && ok "Server band ho gaya (PID $pid)"
+    else
+      warn "Server pehle se band hai"
+    fi
+    rm -f "$PID_FILE"
+  else
+    warn "Server band hai (pid file nahi mili)"
+  fi
+}
+
+cmd_restart() { cmd_stop; sleep 1; cmd_start; }
+
+cmd_password() {
+  [ -f "$SERVER_PY" ] || { err "Install nahi hua. Pehle: cloud install"; exit 1; }
+  echo "🔒 Naya password set karo:"
+  python3 "$SERVER_PY" --config "$CONFIG_FILE" --data "$DATA_DIR" --port "$PORT" --set-password
+  echo "ℹ Server restart karo taaki naya password lage: cloud restart"
+}
+
+cmd_logs() {
+  if has_systemd && systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    journalctl -u "$SERVICE_NAME" -f
+  elif [ -f "$LOG_FILE" ]; then
+    tail -f "$LOG_FILE"
+  else
+    err "Log file nahi mili"
+  fi
+}
+
+# ============================================================
+#  MENU
+# ============================================================
+menu() {
+  while true; do
+    echo ""
+    echo "========================================"
+    echo "   ☁️  MyCloud — Private Storage"
+    echo "   Sirf aapke liye • Port $PORT • No Docker"
+    echo "========================================"
+    echo "   1) Install      — pehli baar setup"
+    echo "   2) Uninstall    — sab hata do"
+    echo "   3) Status       — chal raha hai ya nahi"
+    echo "   4) Start        — server chalu karo"
+    echo "   5) Stop         — server band karo"
+    echo "   6) Restart      — band karke chalu karo"
+    echo "   7) Password     — password badlo"
+    echo "   8) Logs         — server log dekho"
+    echo "   0) Exit"
+    echo "========================================"
+    read -rp "   Option daalo (0-8): " opt
+    case "$opt" in
+      1) cmd_install ;;
+      2) cmd_uninstall ;;
+      3) cmd_status ;;
+      4) cmd_start ;;
+      5) cmd_stop ;;
+      6) cmd_restart ;;
+      7) cmd_password ;;
+      8) cmd_logs ;;
+      0) echo "👋 Bye!"; exit 0 ;;
+      *) err "Galat option. 0-8 me se ek daalo." ;;
+    esac
+    echo ""
+    read -rp "   Enter dabao menu pe wapas... " _x
+  done
+}
+
+# ---------- entry ----------
+case "${1:-menu}" in
+  install)    cmd_install ;;
+  uninstall)  cmd_uninstall ;;
+  status)     cmd_status ;;
+  start)      cmd_start ;;
+  stop)       cmd_stop ;;
+  restart)    cmd_restart ;;
+  password)   cmd_password ;;
+  logs|log)   cmd_logs ;;
+  menu|"")    menu ;;
+  *) echo "Usage: $0 [install|uninstall|status|start|stop|restart|password|logs]"; exit 1 ;;
+esac
