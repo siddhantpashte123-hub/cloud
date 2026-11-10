@@ -79,6 +79,10 @@ Direct commands bhi chalenge:
 
 ---
 
+## 🎨 Design (unslopped)
+
+UI ko [unslop](https://github.com/heydamir/unslop) method (by [@heydamir](https://x.com/heydamir), CC BY 4.0) se redesign kiya gaya hai — no gradients, no glows, no emoji clutter. Ink-tinted dark theme, ember accent, asli photo thumbnails, ek hi icon set, aur shaant copy.
+
 ## ✨ Features
 
 | Feature | Detail |
