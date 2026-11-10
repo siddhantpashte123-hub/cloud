@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -147,6 +147,11 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input{font:inherit;color:var(--txt)}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .num,.size,.mt,td.num{font-variant-numeric:tabular-nums}
+/* icons inside controls: fixed 16px so inline SVG kahi overflow na kare */
+.btn svg,.iconbtn svg{width:16px;height:16px;flex:none}
+.crumbs svg,.nav svg,.dlg h3 svg{width:16px;height:16px;flex:none}
+.crumbs .sep{display:inline-flex;color:var(--mut)}
+.crumbs .sep svg{width:12px;height:12px}
 mark{color:var(--acc);background:none}
 """
 
