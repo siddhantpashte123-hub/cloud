@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -350,11 +350,45 @@ body{display:flex;flex-direction:column}
 .nm{font-size:13px;color:var(--txt);word-break:break-all;line-height:1.35;max-height:2.7em;
   overflow:hidden}
 .mt{font-size:12px;color:var(--mut);margin-top:2px}
-.acts{position:absolute;top:12px;right:12px;display:flex;gap:4px;opacity:0;
-  transition:opacity .12s var(--ease)}
-.item:hover .acts,.item:focus-within .acts{opacity:1}
-.acts .iconbtn{width:28px;height:28px;background:rgba(11,13,20,.82);backdrop-filter:blur(4px)}
-.acts .iconbtn svg{width:14px;height:14px}
+.mbtn{position:absolute;top:12px;right:12px;width:28px;height:28px;
+  background:rgba(11,13,20,.82);backdrop-filter:blur(4px)}
+.mbtn svg{width:15px;height:15px}
+.pick{position:absolute;top:12px;left:12px;width:22px;height:22px;border-radius:50%;
+  border:1.5px solid var(--mut);background:rgba(11,13,20,.72);display:none;
+  align-items:center;justify-content:center;color:#fff;z-index:2}
+.pick svg{width:12px;height:12px;display:none}
+#content.selmode .item .pick{display:inline-flex}
+.item.sel .pick{display:inline-flex;background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.item.sel .pick svg{display:block;stroke-width:2.5}
+.item.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),inset 0 1px 0 rgba(255,255,255,.03)}
+.picktd{width:36px;text-align:center}
+tr .pick.show{display:inline-flex;position:static;width:18px;height:18px;border-radius:4px}
+tr.sel{background:rgba(91,157,255,.08)}
+tr.sel .pick{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+tr.sel .pick svg{display:block;stroke-width:2.5}
+.selbar{display:none;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-ctl);padding:8px 12px;margin-bottom:16px}
+.selbar.show{display:flex;animation:rise .24s var(--ease) both}
+.selbar .sc{font-size:13px;color:var(--txt2);padding:0 4px}
+.btn.danger:hover{color:#f2a6aa;border-color:rgba(229,72,77,.4);background:rgba(229,72,77,.12)}
+.selbox{appearance:none;cursor:pointer;padding-right:28px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a3a9b8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center}
+.selbox option{background:var(--raise);color:var(--txt)}
+.popmenu{position:fixed;z-index:80;display:none;flex-direction:column;min-width:172px;
+  background:var(--raise);border:1px solid var(--line);border-radius:var(--r-ctl);padding:4px;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);animation:pop .16s var(--ease) both}
+.mi{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13px;
+  color:var(--txt2);text-align:left;width:100%;transition:background .12s var(--ease),color .12s var(--ease)}
+.mi:hover{background:var(--card);color:var(--txt)}
+.mi svg{width:15px;height:15px}
+.mi.danger:hover{color:#f2a6aa;background:rgba(229,72,77,.1)}
+.pnav{display:none}
+.pnav.on{display:inline-flex}
+.pinfo{color:var(--mut);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ringwrap{position:relative;width:44px;height:44px;flex:none}
+.ringpct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--txt2)}
 button[data-del]:hover{color:#f2a6aa;border-color:rgba(229,72,77,.4);background:rgba(229,72,77,.12)}
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
   border-radius:var(--r-card);overflow:hidden}
@@ -448,10 +482,13 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
   <div class="storage">
     <div class="lab"><i class="ico" id="ic-drive"></i>Storage</div>
     <div class="srow">
-      <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
-        <circle class="rb" cx="18" cy="18" r="15.9155"/>
-        <circle class="rf" id="ringFill" cx="18" cy="18" r="15.9155"/>
-      </svg>
+      <div class="ringwrap">
+        <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+          <circle class="rb" cx="18" cy="18" r="15.9155"/>
+          <circle class="rf" id="ringFill" cx="18" cy="18" r="15.9155"/>
+        </svg>
+        <span class="ringpct num" id="ringPct">0%</span>
+      </div>
       <div><div class="val num" id="storTxt">—</div><div class="sub2" id="storSub"></div></div>
     </div>
   </div>
@@ -469,7 +506,20 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
     <button class="btn" id="btnMkdir2"></button>
     <button class="btn primary" id="btnUpload"></button>
     <button class="btn" id="btnZip"></button>
+    <button class="btn" id="btnSel"></button>
+    <select class="btn selbox" id="sortSel" title="Sort">
+      <option value="name">Name</option>
+      <option value="size">Size</option>
+      <option value="new">Newest</option>
+    </select>
     <span class="tc" id="tc"></span>
+  </div>
+  <div class="selbar" id="selbar">
+    <span class="sc num" id="selCount"></span>
+    <button class="btn" id="selZip"></button>
+    <button class="btn danger" id="selDel"></button>
+    <span style="flex:1"></span>
+    <button class="btn" id="selCancel">Cancel</button>
   </div>
   <div id="content"></div>
 </main>
@@ -485,14 +535,11 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 <input id="renameInput" autocomplete="off">
 <div class="row"><button class="btn" data-close="renameModal">Cancel</button><button class="btn primary" id="btnRenameGo">Rename</button></div></div></div>
 
-<div class="modal" id="shareModal"><div class="dlg"><h3>Share link</h3>
-<input id="shareUrl" readonly onclick="this.select()">
-<div class="row"><button class="btn" id="btnRevokeShare">Revoke</button><button class="btn" data-close="shareModal">Done</button><button class="btn primary" id="btnCopyShare">Copy link</button></div>
-<div class="sub2" style="margin-top:12px">Anyone with this link can download the file — no password needed.</div></div></div>
-
 <div class="modal" id="previewModal"><div class="dlg wide">
-<div class="dh"><span class="t" id="prevTitle"></span><button class="iconbtn" data-close="previewModal" id="prevClose"></button></div>
+<div class="dh"><button class="iconbtn pnav" id="prevL" title="Previous"></button><button class="iconbtn pnav" id="prevR" title="Next"></button><span class="t" id="prevTitle"></span><span class="pinfo" id="prevInfo"></span><button class="iconbtn" data-close="previewModal" id="prevClose"></button></div>
 <div class="db" id="prevBody"></div></div></div>
+
+<div class="popmenu" id="popmenu"></div>
 
 <div class="tray" id="tray">
   <div class="th"><span id="trayTitle">Uploading</span><span class="ts num" id="trayStat"></span></div>
@@ -525,7 +572,10 @@ const P = {
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   chev:'<path d="m9 18 6-6-6-6"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
-  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  chevL:'<path d="m15 18-6-6 6-6"/>',
   drive:'<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
@@ -587,6 +637,11 @@ $("btnUploadSide").innerHTML = ic("upload") + "<span>Upload</span>";
 $("btnFolderSide").innerHTML = ic("folderOpen") + "<span>Upload folder</span>";
 $("btnZip").innerHTML = ic("archive") + "<span>Download ZIP</span>";
 $("viewBtn").innerHTML = ic("list");
+$("btnSel").innerHTML = ic("check") + "<span>Select</span>";
+$("selZip").innerHTML = ic("archive") + "<span>Download ZIP</span>";
+$("selDel").innerHTML = ic("trash") + "<span>Delete</span>";
+$("prevL").innerHTML = ic("chevL");
+$("prevR").innerHTML = ic("chev");
 
 const NAV = [["","Home","folderOpen"],["image","Photos","image"],["video","Videos","film"],["audio","Music","music"],["doc","Documents","fileText"]];
 function buildNav(){
@@ -606,7 +661,8 @@ function markNav(){
 }
 
 /* ------- state ------- */
-let curPath = "", files = [], view = "grid", typeFilter = "", renameTarget = "";
+let curPath = "", files = [], view = "grid", typeFilter = "", renameTarget = "", sortBy = "name", selMode = false;
+let selected = new Set(), prevList = [], prevIdx = 0;
 
 function toast(msg, bad){
   const t = $("toast"); t.textContent = msg;
@@ -627,6 +683,7 @@ async function load(){
   const quota = d.quota_bytes || 0, usedB = d.used_bytes || 0;
   const pct = quota ? Math.min(100, usedB / quota * 100) : 0;
   $("ringFill").style.strokeDashoffset = (100 - pct).toFixed(1);
+  $("ringPct").textContent = Math.round(pct) + "%";
   $("storTxt").textContent = fmt(usedB) + " of " + (quota ? fmt(quota) : "—");
   $("storSub").textContent = (d.count || 0) + " files · " + (d.quota || "") + " quota";
   renderCrumbs(); markNav(); render(true);
@@ -657,10 +714,18 @@ function visible(){
   });
   const q = $("q").value.trim().toLowerCase();
   if (q) v = v.filter(f => f.name.toLowerCase().includes(q));
+  v = [...v].sort((a, b) => {
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+    if (sortBy === "size") return b.size - a.size;
+    if (sortBy === "new") return b.mtime.localeCompare(a.mtime);
+    return a.name.localeCompare(b.name);
+  });
   return v;
 }
 function render(animate){
   const v = visible(), c = $("content");
+  c.classList.toggle("selmode", selMode);
+  updateSelBar();
   $("tc").textContent = v.length ? v.length + (v.length === 1 ? " item" : " items") : "";
   $("viewBtn").innerHTML = ic(view === "grid" ? "list" : "grid");
   if (!v.length){
@@ -677,45 +742,31 @@ function render(animate){
       const thumb = isImg
         ? `<img loading="lazy" onload="this.classList.add('ok')" src="/api/download?path=${encodeURIComponent(f.path)}&inline=1" alt="">`
         : f.is_dir ? `<i class="fic">${ic("folder")}</i>` : badgeFor(f).html;
-      const anim = animate ? ` enter" style="animation-delay:${Math.min(i * 24, 264)}ms` : "";
-      return `<div class="item${anim}" tabindex="0" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">
-        <div class="acts">
-          ${f.is_dir ? "" : `<button class="iconbtn" title="Share" data-sh="${p}">${ic("link")}</button><button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button>`}
-          <button class="iconbtn" title="Rename" data-rn="${p}" data-name="${n}">${ic("pencil")}</button>
-          <button class="iconbtn" title="Delete" data-del="${p}" data-name="${n}">${ic("trash")}</button>
-        </div>
+      const anim = animate ? ` style="animation-delay:${Math.min(i * 24, 264)}ms` : "";
+      const cls = "item" + (animate ? " enter" : "") + (selected.has(f.path) ? " sel" : "");
+      return `<div class="${cls}" tabindex="0" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">
+        <button class="iconbtn mbtn" title="Actions" data-menu="${p}" data-name="${n}" data-dir="${f.is_dir ? 1 : 0}">${ic("more")}</button>
+        <button class="pick" title="Select" data-pick="${p}">${ic("check")}</button>
         <div class="thumb">${thumb}</div>
         <div class="meta"><div class="nm">${n}</div><div class="mt">${f.is_dir ? "Folder" : fmt(f.size)}</div></div>
       </div>`;
     }).join("") + `</div>`;
   } else {
-    c.innerHTML = `<table class="${animate ? "fadein" : ""}"><thead><tr><th>Naam</th><th style="width:110px">Size</th><th style="width:150px">Modified</th><th style="width:124px"></th></tr></thead><tbody>` +
+    c.innerHTML = `<table class="${animate ? "fadein" : ""}"><thead><tr>${selMode ? '<th style="width:36px"></th>' : ""}<th>Name</th><th style="width:110px">Size</th><th style="width:150px">Modified</th><th style="width:52px"></th></tr></thead><tbody>` +
       v.map(f => {
         const p = esc(f.path), n = esc(f.name);
-        return `<tr>
+        return `<tr class="${selected.has(f.path) ? "sel" : ""}">
+          ${selMode ? `<td class="picktd"><button class="pick show" data-pick="${p}">${ic("check")}</button></td>` : ""}
           <td><span class="rowic">${f.is_dir ? `<i class="fic">${ic("folder")}</i>` : badgeFor(f).small}</span><a href="#" class="nm2" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">${n}</a></td>
           <td class="size">${f.is_dir ? "—" : fmt(f.size)}</td><td class="mtime">${f.mtime}</td>
-          <td style="white-space:nowrap;text-align:right">
-            ${f.is_dir ? "" : `<button class="iconbtn" title="Share" data-sh="${p}">${ic("link")}</button> <button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button> `}
-            <button class="iconbtn" title="Rename" data-rn="${p}" data-name="${n}">${ic("pencil")}</button>
-            <button class="iconbtn" title="Delete" data-del="${p}" data-name="${n}">${ic("trash")}</button>
-          </td></tr>`;
+          <td style="text-align:right"><button class="iconbtn" title="Actions" data-menu="${p}" data-name="${n}" data-dir="${f.is_dir ? 1 : 0}">${ic("more")}</button></td></tr>`;
       }).join("") + `</tbody></table>`;
   }
 }
 
 /* ------- actions ------- */
 function dl(p){ location.href = "/api/download?path=" + encodeURIComponent(p); }
-let sharePathNow = "";
-async function shareFile(p){
-  const r = await fetch("/api/share", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:p})});
-  let d = null;
-  try { d = await r.json(); } catch(_){}
-  if (!r.ok || !d || !d.url){ toast("Couldn't create share link", true); return; }
-  sharePathNow = p;
-  $("shareUrl").value = location.origin + d.url;
-  openModal("shareModal");
-}
+
 function askRename(p, n){ renameTarget = p; $("renameInput").value = n; openModal("renameModal"); }
 async function del(p, n){
   if (!confirm(`Delete "${n}"? This cannot be undone.`)) return;
@@ -734,6 +785,13 @@ async function mkdir(){
   toast(r.ok ? "Folder created" : "Create failed", !r.ok); load();
 }
 async function preview(p, n){
+  prevList = visible().filter(f => !f.is_dir);
+  prevIdx = Math.max(0, prevList.findIndex(f => f.path === p));
+  const many = prevList.length > 1;
+  $("prevL").classList.toggle("on", many);
+  $("prevR").classList.toggle("on", many);
+  const f0 = prevList[prevIdx];
+  $("prevInfo").textContent = f0 ? fmt(f0.size) + " · " + f0.mtime : "";
   const e = extOf(n), u = "/api/download?path=" + encodeURIComponent(p) + "&inline=1";
   $("prevTitle").textContent = n;
   let h = "";
@@ -834,26 +892,71 @@ function uploadFiles(entries){
 }
 
 /* ------- wiring ------- */
-$("content").addEventListener("dblclick", e => {
-  const el = e.target.closest("[data-open]"); if (!el) return;
-  const p = el.dataset.open;
-  if (el.dataset.dir === "1") go(p); else preview(p, el.dataset.name);
-});
 $("content").addEventListener("click", e => {
   const b = e.target.closest("button");
   if (b){
-    if (b.dataset.dl){ dl(b.dataset.dl); }
-    else if (b.dataset.rn){ askRename(b.dataset.rn, b.dataset.name); }
-    else if (b.dataset.del){ del(b.dataset.del, b.dataset.name); }
-    else if (b.dataset.sh){ shareFile(b.dataset.sh); }
+    if (b.dataset.menu !== undefined && b.dataset.menu !== null){ openPop(b, e); return; }
+    if (b.dataset.pick !== undefined && b.dataset.pick !== null){ togglePick(b.dataset.pick); return; }
+    if (b.dataset.dl){ dl(b.dataset.dl); return; }
+    if (b.dataset.rn){ askRename(b.dataset.rn, b.dataset.name); return; }
+    if (b.dataset.del){ del(b.dataset.del, b.dataset.name); return; }
     return;
   }
-  // single click/tap: photo ya file ka preview kholo, folder me ghuso
+  // single click/tap: preview ya folder, ya select-mode me selection toggle
   const el = e.target.closest("[data-open]");
   if (!el) return;
   e.preventDefault();
+  if (selMode){ togglePick(el.dataset.open); return; }
   if (el.dataset.dir === "1") go(el.dataset.open); else preview(el.dataset.open, el.dataset.name);
 });
+
+/* ------- context menu (⋯) ------- */
+let popPath = "", popName = "", popDir = false;
+function openPop(btn, ev){
+  ev.stopPropagation();
+  popPath = btn.dataset.menu; popName = btn.dataset.name || popPath.split("/").pop(); popDir = btn.dataset.dir === "1";
+  const m = $("popmenu");
+  m.innerHTML = `
+    <button class="mi" data-act="preview">${ic(popDir ? "folderOpen" : "eye")}<span>${popDir ? "Open" : "Preview"}</span></button>
+    ${popDir ? "" : `<button class="mi" data-act="dl">${ic("download")}<span>Download</span></button>`}
+    <button class="mi" data-act="rn">${ic("pencil")}<span>Rename</span></button>
+    <button class="mi danger" data-act="del">${ic("trash")}<span>Delete</span></button>`;
+  m.style.display = "flex";
+  const r = btn.getBoundingClientRect();
+  const mw = m.offsetWidth, mh = m.offsetHeight;
+  let x = Math.min(r.right - mw, window.innerWidth - mw - 8);
+  let y = r.bottom + 4; if (y + mh > window.innerHeight - 8) y = r.top - mh - 4;
+  m.style.left = Math.max(8, x) + "px"; m.style.top = y + "px";
+}
+function closePop(){ $("popmenu").style.display = "none"; }
+document.addEventListener("click", e => { if (!e.target.closest("#popmenu")) closePop(); });
+window.addEventListener("scroll", closePop, true);
+$("popmenu").addEventListener("click", e => {
+  const mi = e.target.closest(".mi"); if (!mi) return;
+  closePop();
+  const act = mi.dataset.act;
+  if (act === "preview"){ if (popDir) go(popPath); else preview(popPath, popName); }
+  else if (act === "dl"){ dl(popPath); }
+  else if (act === "rn"){ askRename(popPath, popName); }
+  else if (act === "del"){ del(popPath, popName); }
+});
+
+/* ------- multi-select ------- */
+function updateSelBar(){
+  $("selbar").classList.toggle("show", selMode);
+  $("selCount").textContent = selected.size ? selected.size + " selected" : "Select files";
+  $("btnSel").classList.toggle("primary", selMode);
+}
+function togglePick(path){
+  if (selected.has(path)) selected.delete(path); else selected.add(path);
+  render(false);
+}
+function showPrevAt(i){
+  if (!prevList.length) return;
+  prevIdx = ((i % prevList.length) + prevList.length) % prevList.length;
+  const f = prevList[prevIdx];
+  preview(f.path, f.name);
+}
 $("content").addEventListener("keydown", e => {
   if (e.key !== "Enter") return;
   const el = e.target.closest(".item[data-open]"); if (!el) return;
@@ -868,25 +971,47 @@ $("btnUpload").addEventListener("click", () => $("fileInput").click());
 $("btnUploadSide").addEventListener("click", () => $("fileInput").click());
 $("btnFolderSide").addEventListener("click", () => $("dirInput").click());
 $("btnZip").addEventListener("click", () => { location.href = "/api/zip?path=" + encodeURIComponent(curPath); });
+$("btnSel").addEventListener("click", () => { selMode = !selMode; if (!selMode) selected.clear(); render(false); });
+$("selCancel").addEventListener("click", () => { selMode = false; selected.clear(); render(false); });
+$("selDel").addEventListener("click", async () => {
+  if (!selected.size) return;
+  if (!confirm(`Delete ${selected.size} item(s)? This cannot be undone.`)) return;
+  let fails = 0;
+  for (const p2 of [...selected]){
+    const r = await fetch("/api/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:p2})});
+    if (!r.ok) fails++;
+  }
+  selMode = false; selected.clear();
+  toast(fails ? `${fails} delete failed` : "Deleted", !!fails); load();
+});
+$("selZip").addEventListener("click", async () => {
+  if (!selected.size) return;
+  const r = await fetch("/api/zipsel", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({paths:[...selected]})});
+  if (!r.ok){ toast("ZIP failed", true); return; }
+  const blob = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "bluecloud-selection.zip";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+$("sortSel").addEventListener("change", e => { sortBy = e.target.value; render(true); });
+$("prevL").addEventListener("click", () => showPrevAt(prevIdx - 1));
+$("prevR").addEventListener("click", () => showPrevAt(prevIdx + 1));
 $("fileInput").addEventListener("change", e => uploadFiles(normEntries(e.target.files)));
 $("dirInput").addEventListener("change", e => uploadFiles(normEntries(e.target.files)));
 $("btnMkdirGo").addEventListener("click", mkdir);
 $("btnRenameGo").addEventListener("click", doRename);
-$("btnCopyShare").addEventListener("click", async () => {
-  const inp = $("shareUrl");
-  try { await navigator.clipboard.writeText(inp.value); }
-  catch(_) { inp.select(); document.execCommand("copy"); }
-  toast("Share link copied");
-});
-$("btnRevokeShare").addEventListener("click", async () => {
-  await fetch("/api/unshare", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:sharePathNow})});
-  closeModal("shareModal"); toast("Share link removed"); load();
-});
 $("folderName").addEventListener("keydown", e => { if (e.key === "Enter") mkdir(); });
 $("renameInput").addEventListener("keydown", e => { if (e.key === "Enter") doRename(); });
 document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => closeModal(b.dataset.close)));
 document.querySelectorAll(".modal").forEach(m => m.addEventListener("mousedown", e => { if (e.target === m) closeModal(m.id); }));
-document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".modal.open").forEach(m => closeModal(m.id)); });
+document.addEventListener("keydown", e => {
+  if ($("previewModal").classList.contains("open")){
+    if (e.key === "ArrowLeft" && prevList.length > 1) showPrevAt(prevIdx - 1);
+    else if (e.key === "ArrowRight" && prevList.length > 1) showPrevAt(prevIdx + 1);
+  }
+  if (e.key === "Escape"){ closePop(); document.querySelectorAll(".modal.open").forEach(m => closeModal(m.id)); }
+});
 
 const overlay = $("overlay");
 overlay.querySelector(".oi").innerHTML = ic("upload");
@@ -1005,9 +1130,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "version": VERSION})
             return
 
-        if path.startswith("/s/"):   # public share link — login nahi chahiye
-            self.handle_share_download(path[3:])
-            return
 
         if path.startswith("/api/"):
             if not self.require_auth():
@@ -1053,10 +1175,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.handle_mkdir()
             elif path == "/api/rename":
                 self.handle_rename()
-            elif path == "/api/share":
-                self.handle_share()
-            elif path == "/api/unshare":
-                self.handle_unshare()
+            elif path == "/api/zipsel":
+                self.handle_zipsel()
             else:
                 self.send_json({"error": "not found"}, 404)
             return
@@ -1102,8 +1222,6 @@ class Handler(BaseHTTPRequestHandler):
         if not target.exists() or not target.is_dir():
             return self.send_json({"error": "not found"}, 404)
         items = []
-        _cfg = load_config() or {}
-        shared_paths = {sh.get("path"): t for t, sh in (_cfg.get("shares") or {}).items()}
         try:
             entries = sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
         except OSError as e:
@@ -1111,14 +1229,12 @@ class Handler(BaseHTTPRequestHandler):
         for e in entries:
             try:
                 st = e.stat()
-                relp = str(e.relative_to(DATA_DIR.resolve())) if e != DATA_DIR.resolve() else ""
                 items.append({
                     "name": e.name,
-                    "path": relp,
+                    "path": str(e.relative_to(DATA_DIR.resolve())) if e != DATA_DIR.resolve() else "",
                     "is_dir": e.is_dir(),
                     "size": st.st_size if e.is_file() else 0,
                     "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
-                    "shared": shared_paths.get(relp),
                 })
             except OSError:
                 continue
@@ -1183,6 +1299,35 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Disposition", f'attachment; filename="{name}.zip"')
         self.end_headers()
         self.wfile.write(data)
+
+    def handle_zipsel(self):
+        """Selected items ka ZIP (multi-select download)."""
+        data = self.read_json()
+        paths = data.get("paths") or []
+        if not paths:
+            return self.send_json({"error": "paths required"}, 400)
+        import io
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for rel in paths:
+                try:
+                    t = safe_join(DATA_DIR, rel)
+                except ValueError:
+                    continue
+                if t.is_dir():
+                    for root, _, fns in os.walk(t):
+                        for fn in fns:
+                            full = Path(root) / fn
+                            zf.write(full, full.relative_to(DATA_DIR.resolve()))
+                elif t.is_file():
+                    zf.write(t, t.relative_to(DATA_DIR.resolve()))
+        payload = buf.getvalue()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Content-Disposition", 'attachment; filename="bluecloud-selection.zip"')
+        self.end_headers()
+        self.wfile.write(payload)
 
     def handle_upload(self, qs):
         """Raw streaming upload: body = file bytes, query: path=<dir>&name=<relpath>.
@@ -1311,69 +1456,6 @@ class Handler(BaseHTTPRequestHandler):
         target.rename(dest)
         self.send_json({"ok": True})
 
-    # ---- share links
-    def handle_share(self):
-        data = self.read_json()
-        rel = data.get("path", "")
-        if not rel:
-            return self.send_json({"error": "path required"}, 400)
-        try:
-            target = safe_join(DATA_DIR, rel)
-        except ValueError:
-            return self.send_json({"error": "invalid path"}, 400)
-        if not target.exists() or not target.is_file():
-            return self.send_json({"error": "not found"}, 404)
-        cfg = load_config() or {}
-        shares = cfg.setdefault("shares", {})
-        for tok, sh in shares.items():          # same file ka purana link wapas do
-            if sh.get("path") == rel:
-                return self.send_json({"ok": True, "token": tok, "url": f"/s/{tok}"})
-        tok = secrets.token_urlsafe(8)
-        shares[tok] = {"path": rel, "created": int(time.time())}
-        save_config(cfg)
-        self.send_json({"ok": True, "token": tok, "url": f"/s/{tok}"})
-
-    def handle_unshare(self):
-        data = self.read_json()
-        rel = data.get("path", "")
-        cfg = load_config() or {}
-        shares = cfg.get("shares") or {}
-        gone = [t for t, sh in shares.items() if sh.get("path") == rel]
-        for t in gone:
-            shares.pop(t, None)
-        cfg["shares"] = shares
-        save_config(cfg)
-        self.send_json({"ok": True, "revoked": len(gone)})
-
-    def handle_share_download(self, tok):
-        cfg = load_config() or {}
-        sh = (cfg.get("shares") or {}).get(tok)
-        if not sh:  # public page — chhota sa saaf error
-            body = ("<!DOCTYPE html><meta charset=utf-8><body style='font-family:sans-serif;"
-                    "background:#0b0d14;color:#eef0f5;display:flex;min-height:100vh;align-items:center;"
-                    "justify-content:center'><div style='text-align:center'><h1 style='font-weight:500'>"
-                    "Link invalid or revoked</h1><p style='color:#a3a9b8'>This share link no longer works.</p>")
-            return self.send_html(body, 404)
-        try:
-            target = safe_join(DATA_DIR, sh.get("path", ""))
-        except ValueError:
-            return self.send_json({"error": "invalid path"}, 400)
-        if not target.exists() or not target.is_file():
-            body = ("<!DOCTYPE html><meta charset=utf-8><body style='font-family:sans-serif;"
-                    "background:#0b0d14;color:#eef0f5;display:flex;min-height:100vh;align-items:center;"
-                    "justify-content:center'><div style='text-align:center'><h1 style='font-weight:500'>"
-                    "File no longer available</h1><p style='color:#a3a9b8'>It was moved or deleted.</p>")
-            return self.send_html(body, 404)
-        ctype, _ = mimetypes.guess_type(str(target))
-        size = target.stat().st_size   # seedha download — koi preview nahi
-        self.send_response(200)
-        self.send_header("Content-Type", ctype or "application/octet-stream")
-        self.send_header("Content-Length", str(size))
-        self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.end_headers()
-        with open(target, "rb") as f:
-            shutil.copyfileobj(f, self.wfile, length=1024 * 1024)
 
 
 def main():
