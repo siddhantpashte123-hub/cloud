@@ -141,7 +141,7 @@ pw = os.environ["PW1"]
 salt = secrets.token_bytes(16)
 dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
 cfg = {"salt": salt.hex(), "hash": dk.hex(), "port": int(os.environ["PORT"]),
-       "data": os.environ["DATA_DIR"], "version": "1.4.0", "quota_gb": 10}
+       "data": os.environ["DATA_DIR"], "version": "1.5.0"}
 with open(os.environ["CONFIG_FILE"], "w") as f:
     json.dump(cfg, f, indent=2)
 os.chmod(os.environ["CONFIG_FILE"], 0o600)
@@ -281,8 +281,16 @@ cmd_status() {
     count="$(find "$DATA_DIR" -type f 2>/dev/null | wc -l)"
     echo "   Data: $used used • $count files • $DATA_DIR"
     local q
-    q="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('quota_gb', 10))" "$CONFIG_FILE" 2>/dev/null || echo "?")"
-    echo "   Quota: ${q} GB  (badlo: cloud quota 25)"
+    q="$(python3 - "$CONFIG_FILE" "$DATA_DIR" <<'PY'
+import json, shutil, sys
+cfg = json.load(open(sys.argv[1]))
+if "quota_gb" in cfg:
+    print(f"{float(cfg['quota_gb']):g} GB")
+else:
+    print(f"{shutil.disk_usage(sys.argv[2]).total / (1024**3):.1f} GB (poora disk)")
+PY
+)"
+    echo "   Quota: ${q}  (limit set karo: cloud quota 25)"
   fi
   echo "   URL: http://$(public_ip):$PORT"
 }
@@ -330,10 +338,14 @@ cmd_quota() {
   if [ -z "${1:-}" ]; then
     python3 - "$CONFIG_FILE" <<'PY'
 import json, sys
+import shutil
 cfg = json.load(open(sys.argv[1]))
-q = cfg.get("quota_gb", 10)
-print(f"   Storage quota: {q:g} GB")
-print("   Badalne ke liye: cloud quota 25   (GB me)")
+if "quota_gb" in cfg:
+    print(f"   Storage quota: {float(cfg['quota_gb']):g} GB")
+else:
+    gb = shutil.disk_usage('.').total / (1024**3)
+    print(f"   Storage quota: {gb:.1f} GB (poora disk — koi manual limit nahi)")
+print("   Limit lagane ke liye: cloud quota 25   (GB me)")
 PY
   else
     NEWQ="$1" python3 - "$CONFIG_FILE" <<'PY'
