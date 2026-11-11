@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -911,11 +911,17 @@ $("content").addEventListener("click", e => {
   if (el.dataset.dir === "1") go(el.dataset.open); else preview(el.dataset.open, el.dataset.name);
 });
 
+$("content").addEventListener("contextmenu", e => {
+  const el = e.target.closest("[data-open]");
+  if (!el) return;
+  e.preventDefault();   // browser ka default menu nahi — apna menu
+  showPop(e.clientX, e.clientY, el.dataset.open, el.dataset.name, el.dataset.dir === "1");
+});
+
 /* ------- context menu (⋯) ------- */
 let popPath = "", popName = "", popDir = false;
-function openPop(btn, ev){
-  ev.stopPropagation();
-  popPath = btn.dataset.menu; popName = btn.dataset.name || popPath.split("/").pop(); popDir = btn.dataset.dir === "1";
+function showPop(x, y, path, name, isDir){
+  popPath = path; popName = name || path.split("/").pop(); popDir = isDir;
   const m = $("popmenu");
   m.innerHTML = `
     <button class="mi" data-act="preview">${ic(popDir ? "folderOpen" : "eye")}<span>${popDir ? "Open" : "Preview"}</span></button>
@@ -923,10 +929,17 @@ function openPop(btn, ev){
     <button class="mi" data-act="rn">${ic("pencil")}<span>Rename</span></button>
     <button class="mi danger" data-act="del">${ic("trash")}<span>Delete</span></button>`;
   m.style.display = "flex";
-  const r = btn.getBoundingClientRect();
   const mw = m.offsetWidth, mh = m.offsetHeight;
-  let x = Math.min(r.right - mw, window.innerWidth - mw - 8);
-  let y = r.bottom + 4; if (y + mh > window.innerHeight - 8) y = r.top - mh - 4;
+  m.style.left = Math.max(8, Math.min(x, window.innerWidth - mw - 8)) + "px";
+  m.style.top = Math.max(8, Math.min(y, window.innerHeight - mh - 8)) + "px";
+}
+function openPop(btn, ev){
+  ev.stopPropagation();
+  showPop(0, 0, btn.dataset.menu, btn.dataset.name, btn.dataset.dir === "1");
+  const m = $("popmenu"), r = btn.getBoundingClientRect();
+  const mw = m.offsetWidth, mh = m.offsetHeight;
+  let x = r.right - mw, y = r.bottom + 4;
+  if (y + mh > window.innerHeight - 8) y = r.top - mh - 4;
   m.style.left = Math.max(8, x) + "px"; m.style.top = y + "px";
 }
 function closePop(){ $("popmenu").style.display = "none"; }
