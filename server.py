@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MyCloud — Private file storage for your VPS.
+BlueCloud — Private file storage for your VPS.
 Stdlib only. No Docker. No pip packages. Just Python 3.
 
 Run:  python3 server.py --port 1919 --data ./data --config ./config.json
@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -110,16 +110,16 @@ def dir_stats(base: Path):
 # https://github.com/heydamir/unslop — CC BY 4.0
 #
 # Direction:
-#   Product   MyCloud — private file storage, sirf owner ka password
+#   Product   BlueCloud — private file storage, sirf owner ka password
 #   Character shaant, niji, saaf-suthra (calm, personal, meticulous)
-#   World     raat ka aasmaan + desk lamp — ink-tinted dark, ember accent
+#   World     raat ka aasmaan + khula asmaan — ink dark, clear sky blue accent
 #   Moments   asli photo thumbnails, media preview
 #   Signature flat cloud + keyhole mark (single accent color)
 
 FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' "
-           "fill='none' stroke='%23e06c3a' stroke-width='1.8' stroke-linecap='round' "
+           "fill='none' stroke='%235b9dff' stroke-width='1.8' stroke-linecap='round' "
            "stroke-linejoin='round'%3E%3Cpath d='M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'/%3E"
-           "%3Ccircle cx='11' cy='13' r='1.5' fill='%23e06c3a'/%3E%3Cpath d='M11 14v2.4'/%3E%3C/svg%3E")
+           "%3Ccircle cx='11' cy='13' r='1.5' fill='%235b9dff'/%3E%3Cpath d='M11 14v2.4'/%3E%3C/svg%3E")
 
 CLOUD_MARK = ("<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' "
               "stroke-linecap='round' stroke-linejoin='round'><path d='M18 10h-1.26A8 8 0 1 0 9 20h9"
@@ -132,7 +132,7 @@ BASE_CSS = """
   --bg0:#07080d; --bg:#0b0d14; --card:#11141c; --raise:#1a1e28;
   --line:rgba(238,240,245,.08);
   --txt:#eef0f5; --txt2:#a3a9b8; --mut:#7a8296;
-  --acc:#e06c3a; --acc-ink:#1c1108;
+  --acc:#5b9dff; --acc-ink:#0a1424;
   --pos:#4cc38a; --neg:#e5484d;
   --r-ctl:8px; --r-card:12px; --r-modal:14px;
   --ease:cubic-bezier(.22,1,.36,1);
@@ -141,7 +141,7 @@ html{color-scheme:dark}
 body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px;line-height:1.5;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-::selection{background:rgba(224,108,58,.28)}
+::selection{background:rgba(91,157,255,.3)}
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input{font:inherit;color:var(--txt)}
@@ -170,7 +170,7 @@ i.ico svg{width:16px;height:16px}
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MyCloud — Private Storage</title>
+<title>BlueCloud — Private Storage</title>
 <link rel="icon" href="__FAVICON__">
 <style>__BASE_CSS__
 body{display:flex;align-items:center;justify-content:center;padding:24px}
@@ -192,7 +192,7 @@ input:focus{border-color:var(--acc);outline:none}
 button{width:100%;height:40px;background:var(--acc);color:var(--acc-ink);font-weight:500;
   border-radius:var(--r-ctl);font-size:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
   transition:background .12s var(--ease),transform .08s var(--ease)}
-button:hover{background:#eb7743}
+button:hover{background:#6ea9ff}
 button:active{transform:scale(.985)}
 .note{color:var(--mut);font-size:12px;margin-top:20px}
 .note span{margin:0 6px}
@@ -206,7 +206,7 @@ button:active{transform:scale(.985)}
 </style></head><body>
 <form class="card" method="POST" action="/login">
 <div class="mark">__CLOUD_MARK__</div>
-<h1>MyCloud</h1>
+<h1>BlueCloud</h1>
 <div class="sub">Private storage — sirf aapke liye</div>
 %%ERR%%
 <input type="password" name="password" placeholder="Password" required autofocus autocomplete="current-password">
@@ -217,7 +217,7 @@ button:active{transform:scale(.985)}
 APP_HTML = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MyCloud</title>
+<title>BlueCloud</title>
 <link rel="icon" href="__FAVICON__">
 <style>__BASE_CSS__
 __ICONS_CSS__
@@ -244,7 +244,7 @@ body{display:flex;flex-direction:column}
 .btn:active{transform:scale(.98)}
 .btn.primary{background:var(--acc);color:var(--acc-ink);border-color:transparent;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
-.btn.primary:hover{background:#eb7743;color:var(--acc-ink)}
+.btn.primary:hover{background:#6ea9ff;color:var(--acc-ink)}
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
   border-radius:var(--r-ctl);color:var(--txt2);border:1px solid var(--line);background:var(--raise);
   transition:color .12s var(--ease),background .12s var(--ease)}
@@ -254,7 +254,7 @@ body{display:flex;flex-direction:column}
   padding:16px 12px;display:flex;flex-direction:column;gap:24px;overflow-y:auto}
 .nav-label{font-size:12px;color:var(--mut);margin:0 12px 8px;letter-spacing:.01em}
 .nav a{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border-radius:var(--r-ctl);
-  color:var(--txt2);font-size:14px;transition:color .12s var(--ease),background .12s var(--ease);
+  color:var(--txt2);font-size:14px;transition:color .16s var(--ease),background .16s var(--ease);
   position:relative}
 .nav a + a{margin-top:2px}
 .nav a:hover{color:var(--txt);background:var(--raise)}
@@ -273,7 +273,7 @@ body{display:flex;flex-direction:column}
 .main{flex:1;min-width:0;padding:24px 32px 64px;max-width:1440px}
 .crumbs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:14px;margin-bottom:16px}
 .crumbs a{color:var(--txt2);padding:2px 6px;border-radius:6px;
-  transition:color .12s var(--ease),background .12s var(--ease)}
+  transition:color .16s var(--ease),background .16s var(--ease)}
 .crumbs a:hover{color:var(--txt);background:var(--raise)}
 .crumbs .sep{color:var(--mut)}
 .crumbs .here{color:var(--mut);padding:2px 6px}
@@ -283,7 +283,7 @@ body{display:flex;flex-direction:column}
 .drop{border:1px dashed rgba(238,240,245,.16);border-radius:var(--r-card);padding:16px 20px;
   display:flex;align-items:center;gap:12px;color:var(--mut);font-size:13px;margin-bottom:16px;
   transition:border-color .16s var(--ease),color .16s var(--ease),background .16s var(--ease)}
-.drop.over{border-color:var(--acc);color:var(--txt);background:rgba(224,108,58,.06)}
+.drop.over{border-color:var(--acc);color:var(--txt);background:rgba(91,157,255,.07)}
 .drop .grow{flex:1}
 .prog{height:4px;background:var(--raise);border-radius:2px;overflow:hidden;margin-bottom:16px;display:none}
 .prog.show{display:block}
@@ -299,7 +299,8 @@ body{display:flex;flex-direction:column}
 .item:hover{border-color:rgba(238,240,245,.18);background:#131722}
 .thumb{height:112px;border-radius:8px;background:var(--bg);display:flex;align-items:center;
   justify-content:center;overflow:hidden;color:var(--mut)}
-.thumb svg{width:28px;height:28px}
+.thumb svg{width:28px;height:28px;transition:transform .24s var(--ease),color .24s var(--ease)}
+.item:hover .thumb svg{transform:translateY(-2px);color:var(--txt2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;
   transition:opacity .24s var(--ease),transform .48s var(--ease)}
 .thumb img.ok{opacity:1}
@@ -320,8 +321,10 @@ th,td{padding:0 16px;height:40px;text-align:left;font-size:13px;border-bottom:1p
   font-weight:400}
 th{color:var(--mut);font-size:12px;height:36px;background:var(--bg0)}
 tr:last-child td{border-bottom:none}
-tbody tr{transition:background .12s var(--ease)}
+tbody tr{transition:background .16s var(--ease)}
 tbody tr:hover{background:var(--raise)}
+td .rowic{transition:color .16s var(--ease)}
+tbody tr:hover .rowic{color:var(--txt2)}
 td .rowic{display:inline-flex;width:16px;height:16px;color:var(--mut);vertical-align:-3px;margin-right:8px}
 td .rowic svg{width:16px;height:16px}
 td .nm2{color:var(--txt)}
@@ -364,7 +367,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
   transform .18s var(--ease)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.err{color:#f2a6aa;border-color:rgba(229,72,77,.32)}
-.fadein{animation:rise .32s var(--ease) both}
+.fadein{animation:rise .4s var(--ease) both}
 @media(max-width:760px){
   .side{display:none}
   .chips{display:flex}
@@ -375,7 +378,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 }
 </style></head><body>
 <header class="top">
-  <div class="brand"><span class="mark">__CLOUD_MARK__</span><span class="wm">My<mark>Cloud</mark></span></div>
+  <div class="brand"><span class="mark">__CLOUD_MARK__</span><span class="wm">Blue<mark>Cloud</mark></span></div>
   <div class="search"><div class="box"><i class="ico" id="ic-search"></i><input id="q" placeholder="Search" aria-label="Search files"></div></div>
   <button class="iconbtn" id="viewBtn" title="Grid / List"></button>
   <form method="POST" action="/logout" style="margin:0"><button class="btn" id="logoutBtn" type="submit"></button></form>
@@ -769,7 +772,7 @@ def parse_multipart(body: bytes, content_type: str):
 
 # ---------------------------------------------------------------- handler
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MyCloud/1.0"
+    server_version = "BlueCloud/1.0"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
@@ -1102,7 +1105,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global CONFIG_PATH, DATA_DIR, PORT
-    ap = argparse.ArgumentParser(description="MyCloud private storage")
+    ap = argparse.ArgumentParser(description="BlueCloud private storage")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--data", default=str(DATA_DIR))
     ap.add_argument("--config", default=str(CONFIG_PATH))
@@ -1142,7 +1145,7 @@ def main():
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     server = ThreadingHTTPServer((args.host, PORT), Handler)
-    print(f"☁️  MyCloud v{VERSION} running on http://0.0.0.0:{PORT}")
+    print(f"☁️  BlueCloud v{VERSION} running on http://0.0.0.0:{PORT}")
     print(f"📁 Data dir: {DATA_DIR.resolve()}")
     print("   Sirf aap — password protected 🔒  (Ctrl+C to stop)")
     try:
