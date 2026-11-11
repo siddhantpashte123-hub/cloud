@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  MyCloud — EK COMMAND me install (VPS pe)
+#  BlueCloud — EK COMMAND me install (VPS pe)
 #
 #  Option A — repo clone karke:
 #    git clone https://github.com/siddhantpashte123-hub/cloud.git
@@ -21,7 +21,7 @@ else
 fi
 
 echo "========================================"
-echo "  ☁️  MyCloud Installer — 1 Command Setup"
+echo "  ☁️  BlueCloud Installer — 1 Command Setup"
 echo "========================================"
 echo ""
 

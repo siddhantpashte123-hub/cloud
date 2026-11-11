@@ -1,4 +1,4 @@
-# ☁️ MyCloud — Private Storage (VPS ke liye)
+# ☁️ BlueCloud — Private Storage (VPS ke liye)
 
 Apni **private cloud storage** — sirf aap, aapki files, aapka password.
 VPS pe host karo, browser se kahin se bhi access karo. **Docker nahi chahiye** — sirf Python 3.
@@ -49,7 +49,7 @@ Phir browser kholo: **`http://YOUR_VPS_IP:1919`**
 
 ```
 ========================================
-   ☁️  MyCloud — Private Storage
+   ☁️  BlueCloud — Private Storage
    Sirf aapke liye • Port 1919 • No Docker
 ========================================
    1) Install      — pehli baar setup

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  MyCloud — Private Storage CLI
+#  BlueCloud — Private Storage CLI
 #  Usage:
 #    ./cloud            -> menu (1 Install, 2 Uninstall, 3 Status...)
 #    ./cloud install
@@ -93,7 +93,7 @@ public_ip() {
 # ============================================================
 cmd_install() {
   echo "========================================"
-  echo "   ☁️  MyCloud Install — Private Storage"
+  echo "   ☁️  BlueCloud Install — Private Storage"
   echo "========================================"
   echo ""
   ensure_python || exit 1
@@ -153,7 +153,7 @@ PY
     info "systemd service bana raha hoon (boot pe auto-start)..."
     cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=MyCloud Private Storage
+Description=BlueCloud Private Storage
 After=network.target
 
 [Service]
@@ -211,7 +211,7 @@ EOF
 # ============================================================
 cmd_uninstall() {
   echo "========================================"
-  echo "   🗑  MyCloud Uninstall"
+  echo "   🗑  BlueCloud Uninstall"
   echo "========================================"
   cmd_stop >/dev/null 2>&1 || true
   if has_systemd && [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
@@ -237,7 +237,7 @@ cmd_uninstall() {
     esac
   else
     rm -rf "$INSTALL_DIR"
-    ok "MyCloud uninstall ho gaya. Bye! 👋"
+    ok "BlueCloud uninstall ho gaya. Bye! 👋"
   fi
 }
 
@@ -246,7 +246,7 @@ cmd_uninstall() {
 # ============================================================
 cmd_status() {
   echo "========================================"
-  echo "   ☁️  MyCloud Status"
+  echo "   ☁️  BlueCloud Status"
   echo "========================================"
   if is_running; then
     ok "Server CHAL RAHA hai ✅"
@@ -339,7 +339,7 @@ menu() {
   while true; do
     echo ""
     echo "========================================"
-    echo "   ☁️  MyCloud — Private Storage"
+    echo "   ☁️  BlueCloud — Private Storage"
     echo "   Sirf aapke liye • Port $PORT • No Docker"
     echo "========================================"
     echo "   1) Install      — pehli baar setup"
