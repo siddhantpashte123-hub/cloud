@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -103,6 +103,30 @@ def dir_stats(base: Path):
             except OSError:
                 pass
     return total, files, folders
+
+
+def quota_limit():
+    """Storage limit (bytes) — config.json me 'quota_gb' se, default 10 GB."""
+    cfg = load_config() or {}
+    try:
+        return max(1, int(float(cfg.get("quota_gb", 10)) * (1024 ** 3)))
+    except (TypeError, ValueError):
+        return 10 * (1024 ** 3)
+
+
+_usage_cache = {"t": 0.0, "v": 0}
+
+def used_bytes_cached():
+    """dir_stats har request pe chalana mehenga hai — 2s cache."""
+    now = time.time()
+    if now - _usage_cache["t"] < 2:
+        return _usage_cache["v"]
+    total, _, _ = dir_stats(DATA_DIR)
+    _usage_cache["t"], _usage_cache["v"] = now, total
+    return total
+
+def usage_invalidate():
+    _usage_cache["t"] = 0.0
 
 
 # ---------------------------------------------------------------- HTML UI
@@ -265,9 +289,13 @@ body{display:flex;flex-direction:column}
 .storage{padding:0 12px}
 .storage .lab{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:8px}
 .storage .val{font-size:13px;color:var(--txt2);margin-top:8px;font-variant-numeric:tabular-nums}
-.storage .bar{height:4px;background:var(--raise);border-radius:2px;overflow:hidden;margin-top:8px}
-.storage .bar i{display:block;height:100%;width:0;background:var(--acc);border-radius:2px;
-  transition:width .36s var(--ease)}
+.storage .srow{display:flex;align-items:center;gap:12px;margin-top:12px}
+.ring{width:44px;height:44px;transform:rotate(-90deg);flex:none}
+.ring circle{fill:none;stroke-width:3}
+.ring .rb{stroke:var(--raise)}
+.ring .rf{stroke:var(--acc);stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;
+  transition:stroke-dashoffset .6s var(--ease)}
+.storage .sub2{font-size:12px;color:var(--mut);margin-top:2px}
 .side .actions{display:flex;flex-direction:column;gap:8px;padding:0 12px}
 .side .actions .btn{width:100%;justify-content:flex-start}
 .main{flex:1;min-width:0;padding:24px 32px 64px;max-width:1440px}
@@ -354,6 +382,21 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
   border-radius:var(--r-ctl);overflow:auto;max-height:60vh;font-size:12.5px;line-height:1.55;
   width:100%;color:var(--txt2);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .tc{margin-left:auto;color:var(--mut);font-size:12px;align-self:center;font-variant-numeric:tabular-nums}
+.tray{position:fixed;right:20px;bottom:20px;width:320px;max-width:calc(100vw - 40px);
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);z-index:70;
+  box-shadow:0 8px 24px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.03);display:none}
+.tray.show{display:block;animation:rise .24s var(--ease) both}
+.tray .th{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:12px 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:500}
+.tray .ts{color:var(--mut);font-size:12px;font-weight:400;white-space:nowrap}
+.tfiles{max-height:220px;overflow-y:auto;padding:10px 16px 12px;display:flex;flex-direction:column;gap:10px}
+.tfile .nm{font-size:12.5px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tfile .bar{height:3px;background:var(--raise);border-radius:2px;overflow:hidden;margin-top:6px}
+.tfile .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .12s linear}
+.tfile.done .nm{color:var(--mut)}
+.tfile.done .bar i{background:var(--pos)}
+.tfile.err .nm{color:#f2a6aa}
+.tfile.err .bar i{background:var(--neg)}
 .overlay{position:fixed;inset:16px;z-index:60;display:none;align-items:center;justify-content:center;
   background:rgba(11,13,20,.9);border:1.5px dashed var(--acc);border-radius:20px;pointer-events:none}
 .overlay.show{display:flex;animation:ovin .18s var(--ease)}
@@ -391,20 +434,24 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
   </div>
   <div class="storage">
     <div class="lab"><i class="ico" id="ic-drive"></i>Storage</div>
-    <div class="bar"><i id="storBar"></i></div>
-    <div class="val" id="storTxt">—</div>
+    <div class="srow">
+      <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+        <circle class="rb" cx="18" cy="18" r="15.9155"/>
+        <circle class="rf" id="ringFill" cx="18" cy="18" r="15.9155"/>
+      </svg>
+      <div><div class="val num" id="storTxt">—</div><div class="sub2" id="storSub"></div></div>
+    </div>
   </div>
   <div class="actions">
     <button class="btn" id="btnMkdir"></button>
     <button class="btn primary" id="btnUploadSide"></button>
+    <button class="btn" id="btnFolderSide"></button>
   </div>
 </aside>
 <main class="main">
   <div class="crumbs" id="crumbs"></div>
   <div class="chips" id="chips"></div>
-  <div class="drop" id="drop"><i class="ico" id="ic-drop"></i><span class="grow" id="dropTxt">Files yahan drop karo, ya Upload dabao</span></div>
-  <div class="prog" id="prog"><i></i></div>
-  <div class="utext" id="utext"></div>
+  <div class="drop" id="drop"><i class="ico" id="ic-drop"></i><span class="grow" id="dropTxt">Files ya folder yahan drop karo</span></div>
   <div class="toolbar">
     <button class="btn" id="btnMkdir2"></button>
     <button class="btn primary" id="btnUpload"></button>
@@ -415,6 +462,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 </main>
 </div>
 <input type="file" id="fileInput" multiple hidden>
+<input type="file" id="dirInput" webkitdirectory hidden>
 
 <div class="modal" id="mkdirModal"><div class="dlg"><h3 id="tMkdir">New folder</h3>
 <input id="folderName" placeholder="Folder ka naam" autocomplete="off">
@@ -427,6 +475,11 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 <div class="modal" id="previewModal"><div class="dlg wide">
 <div class="dh"><span class="t" id="prevTitle"></span><button class="iconbtn" data-close="previewModal" id="prevClose"></button></div>
 <div class="db" id="prevBody"></div></div></div>
+
+<div class="tray" id="tray">
+  <div class="th"><span id="trayTitle">Uploading</span><span class="ts num" id="trayStat"></span></div>
+  <div class="tfiles" id="trayFiles"></div>
+</div>
 
 <div class="overlay" id="overlay"><div class="ob"><span class="oi"></span><span>Files chhodo — upload shuru ho jayega</span></div></div>
 <div class="toast" id="toast"></div>
@@ -487,6 +540,7 @@ $("btnMkdir").innerHTML = ic("plus") + "<span>New folder</span>";
 $("btnMkdir2").innerHTML = ic("plus") + "<span>New folder</span>";
 $("btnUpload").innerHTML = ic("upload") + "<span>Upload</span>";
 $("btnUploadSide").innerHTML = ic("upload") + "<span>Upload</span>";
+$("btnFolderSide").innerHTML = ic("folderOpen") + "<span>Upload folder</span>";
 $("btnZip").innerHTML = ic("archive") + "<span>Download ZIP</span>";
 $("viewBtn").innerHTML = ic("list");
 
@@ -526,8 +580,11 @@ async function load(){
   if (r.status === 401) { location.reload(); return; }
   const d = await r.json();
   files = d.files || [];
-  $("storBar").style.width = d.disk_total ? Math.min(100, (d.used_bytes / d.disk_total) * 100) + "%" : "0%";
-  $("storTxt").textContent = (d.used || "0 B") + " · " + (d.count || 0) + " files";
+  const quota = d.quota_bytes || 0, usedB = d.used_bytes || 0;
+  const pct = quota ? Math.min(100, usedB / quota * 100) : 0;
+  $("ringFill").style.strokeDashoffset = (100 - pct).toFixed(1);
+  $("storTxt").textContent = fmt(usedB) + " of " + (quota ? fmt(quota) : "—");
+  $("storSub").textContent = (d.count || 0) + " files · " + (d.quota || "") + " quota";
   renderCrumbs(); markNav(); render(true);
 }
 function renderCrumbs(){
@@ -638,31 +695,87 @@ async function preview(p, n){
   openModal("previewModal");
 }
 
-/* ------- upload with progress ------- */
-function uploadFiles(list){
-  if (!list || !list.length) return;
-  const prog = $("prog"), bar = prog.querySelector("i"), ut = $("utext");
-  prog.classList.add("show"); ut.classList.add("show");
-  let i = 0, failed = 0;
-  const step = () => {
-    if (i >= list.length){
-      prog.classList.remove("show"); ut.classList.remove("show"); bar.style.width = "0";
-      $("fileInput").value = "";
-      toast(failed ? `${list.length - failed} upload hui, ${failed} fail` : (list.length > 1 ? list.length + " files upload ho gayi" : "File upload ho gayi"), !!failed);
-      load(); return;
+/* ------- upload system: parallel + streamed + speed/ETA + folder aware ------- */
+function normEntries(fileList){
+  return [...fileList].map(f => ({file: f, rel: (f.webkitRelativePath && f.webkitRelativePath.includes("/")) ? f.webkitRelativePath : f.name}));
+}
+async function collectDropped(dt){
+  const entries = [...(dt.items || [])].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (!entries.length) return normEntries(dt.files);
+  const out = [];
+  async function walk(entry, prefix){
+    if (entry.isFile){
+      const f = await new Promise((res, rej) => entry.file(res, rej));
+      out.push({file: f, rel: prefix + f.name});
+    } else if (entry.isDirectory){
+      const reader = entry.createReader();
+      for (;;){
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e, prefix + entry.name + "/");
+      }
     }
-    const f = list[i]; i++;
-    ut.textContent = `Uploading ${i} of ${list.length} — ${f.name}`;
-    const fd = new FormData(); fd.append("path", curPath); fd.append("file", f);
+  }
+  for (const e of entries) await walk(e, "");
+  return out;
+}
+const CONC = 3;  // 3 files ek saath — connection reuse + parallel = tez
+function uploadFiles(entries){
+  entries = [...entries];
+  if (!entries.length) return;
+  const tray = $("tray"), tstat = $("trayStat"), ttitle = $("trayTitle"), tfiles = $("trayFiles");
+  tfiles.innerHTML = ""; tray.classList.add("show");
+  ttitle.textContent = "Uploading";
+  const rows = entries.map(en => {
+    const row = document.createElement("div"); row.className = "tfile";
+    row.innerHTML = `<div class="nm">${esc(en.rel)}</div><div class="bar"><i></i></div>`;
+    tfiles.appendChild(row); return row;
+  });
+  const totalBytes = entries.reduce((a, en) => a + en.file.size, 0) || 1;
+  const loaded = new Array(entries.length).fill(0);
+  let idx = 0, done = 0, failed = 0;
+  let lastT = performance.now(), lastBytes = 0, speed = 0;
+  const tick = setInterval(() => {
+    const now = performance.now(), cur = loaded.reduce((a, b) => a + b, 0);
+    const inst = (cur - lastBytes) / ((now - lastT) / 1000);
+    if (inst > 0 || speed === 0) speed = speed * 0.6 + inst * 0.4;
+    lastT = now; lastBytes = cur;
+    const remain = totalBytes - cur;
+    const eta = speed > 1 ? Math.ceil(remain / speed) : 0;
+    tstat.textContent = `${done + failed}/${entries.length} · ${fmt(Math.max(0, speed))}/s` + (eta ? ` · ~${eta}s` : "");
+    if (done + failed === entries.length) clearInterval(tick);
+  }, 400);
+  function finish(){
+    clearInterval(tick);
+    ttitle.textContent = failed ? "Upload — kuch fail hue" : "Upload complete";
+    tstat.textContent = `${done} ho gayi` + (failed ? ` · ${failed} fail` : "");
+    $("fileInput").value = ""; $("dirInput").value = "";
+    toast(failed ? `${failed} file(s) fail` : (entries.length > 1 ? entries.length + " files upload ho gayi" : "File upload ho gayi"), !!failed);
+    load();
+    setTimeout(() => tray.classList.remove("show"), 1400);
+  }
+  function next(){
+    if (idx >= entries.length){ if (done + failed === entries.length) finish(); return; }
+    const my = idx++, en = entries[my], row = rows[my], bar = row.querySelector("i");
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/upload");
-    xhr.upload.onprogress = e => { if (e.lengthComputable){
-      bar.style.width = (((i - 1) + e.loaded / e.total) / list.length * 100) + "%"; } };
-    xhr.onload = () => { if (xhr.status !== 200) failed++; bar.style.width = (i / list.length * 100) + "%"; step(); };
-    xhr.onerror = () => { failed++; step(); };
-    xhr.send(fd);
-  };
-  step();
+    xhr.open("POST", "/api/upload?path=" + encodeURIComponent(curPath) + "&name=" + encodeURIComponent(en.rel));
+    xhr.upload.onprogress = e => {
+      if (!e.lengthComputable) return;
+      loaded[my] = e.loaded; bar.style.width = (e.loaded / e.total * 100) + "%";
+    };
+    xhr.onload = () => {
+      loaded[my] = en.file.size;
+      if (xhr.status === 200){ done++; row.classList.add("done"); bar.style.width = "100%"; }
+      else {
+        failed++; row.classList.add("err");
+        try { const d = JSON.parse(xhr.responseText); if (d && d.error) row.querySelector(".nm").textContent = en.rel + " — " + d.error; } catch(_){}
+      }
+      next();
+    };
+    xhr.onerror = () => { failed++; row.classList.add("err"); loaded[my] = en.file.size; next(); };
+    xhr.send(en.file);  // raw bytes — multipart overhead nahi
+  }
+  for (let k = 0; k < Math.min(CONC, entries.length); k++) next();
 }
 
 /* ------- wiring ------- */
@@ -691,8 +804,10 @@ $("btnMkdir").addEventListener("click", () => openModal("mkdirModal"));
 $("btnMkdir2").addEventListener("click", () => openModal("mkdirModal"));
 $("btnUpload").addEventListener("click", () => $("fileInput").click());
 $("btnUploadSide").addEventListener("click", () => $("fileInput").click());
+$("btnFolderSide").addEventListener("click", () => $("dirInput").click());
 $("btnZip").addEventListener("click", () => { location.href = "/api/zip?path=" + encodeURIComponent(curPath); });
-$("fileInput").addEventListener("change", e => uploadFiles(e.target.files));
+$("fileInput").addEventListener("change", e => uploadFiles(normEntries(e.target.files)));
+$("dirInput").addEventListener("change", e => uploadFiles(normEntries(e.target.files)));
 $("btnMkdirGo").addEventListener("click", mkdir);
 $("btnRenameGo").addEventListener("click", doRename);
 $("folderName").addEventListener("keydown", e => { if (e.key === "Enter") mkdir(); });
@@ -715,10 +830,11 @@ window.addEventListener("dragleave", () => {
   dragN = Math.max(0, dragN - 1);
   if (dragN === 0) overlay.classList.remove("show");
 });
-window.addEventListener("drop", e => {
+window.addEventListener("drop", async e => {
   if (!overlay.classList.contains("show")) return;
   e.preventDefault(); dragN = 0; overlay.classList.remove("show");
-  uploadFiles(e.dataTransfer.files);
+  const ents = await collectDropped(e.dataTransfer);
+  uploadFiles(ents);
 });
 
 buildNav();
@@ -735,44 +851,10 @@ LOGIN_HTML = _fill_ui(LOGIN_HTML)
 APP_HTML = _fill_ui(APP_HTML)
 
 
-# ---------------------------------------------------------------- multipart
-def parse_multipart(body: bytes, content_type: str):
-    """Minimal multipart/form-data parser (stdlib only)."""
-    m = re.search(r"boundary=([^;]+)", content_type)
-    if not m:
-        raise ValueError("No boundary")
-    boundary = m.group(1).strip().strip('"').encode()
-    parts = body.split(b"--" + boundary)
-    fields, files = {}, []
-    for part in parts:
-        if not part or part in (b"--\r\n", b"--", b"\r\n"):
-            continue
-        if part.startswith(b"--"):
-            break
-        # strip leading CRLF and trailing CRLF
-        if part.startswith(b"\r\n"):
-            part = part[2:]
-        if part.endswith(b"\r\n"):
-            part = part[:-2]
-        head, sep, data = part.partition(b"\r\n\r\n")
-        if not sep:
-            continue
-        headers = head.decode("utf-8", "replace")
-        name_m = re.search(r'name="([^"]+)"', headers)
-        if not name_m:
-            continue
-        name = name_m.group(1)
-        file_m = re.search(r'filename="([^"]*)"', headers)
-        if file_m:
-            files.append((name, file_m.group(1), data))
-        else:
-            fields[name] = data.decode("utf-8", "replace")
-    return fields, files
-
-
 # ---------------------------------------------------------------- handler
 class Handler(BaseHTTPRequestHandler):
-    server_version = "BlueCloud/1.0"
+    server_version = "BlueCloud/1.4"
+    protocol_version = "HTTP/1.1"  # keep-alive: ek connection pe kai requests — tez
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
@@ -800,6 +882,7 @@ class Handler(BaseHTTPRequestHandler):
     def redirect(self, loc):
         self.send_response(303)
         self.send_header("Location", loc)
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def session_token(self):
@@ -879,6 +962,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/")
             self.send_header("Set-Cookie", "session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+            self.send_header("Content-Length", "0")
             self.end_headers()
             return
 
@@ -886,7 +970,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.require_auth():
                 return
             if path == "/api/upload":
-                self.handle_upload()
+                self.handle_upload(urllib.parse.parse_qs(parsed.query))
             elif path == "/api/delete":
                 self.handle_delete()
             elif path == "/api/mkdir":
@@ -921,6 +1005,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/")
             self.send_header("Set-Cookie", f"session={tok}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}")
+            self.send_header("Content-Length", "0")
             self.end_headers()
         else:
             login_attempts[ip] = (count + 1, now)
@@ -965,6 +1050,8 @@ class Handler(BaseHTTPRequestHandler):
             "used_bytes": total,
             "count": fcount,
             "disk_total": disk_total,
+            "quota_bytes": quota_limit(),
+            "quota": fmt_size(quota_limit()),
         })
 
     def handle_download(self, qs):
@@ -987,7 +1074,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         with open(target, "rb") as f:
-            shutil.copyfileobj(f, self.wfile, length=1024 * 256)
+            shutil.copyfileobj(f, self.wfile, length=1024 * 1024)
 
     def handle_zip(self, qs):
         rel = (qs.get("path") or [""])[0]
@@ -1013,41 +1100,78 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def handle_upload(self):
-        ctype = self.headers.get("Content-Type", "")
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        body = self.rfile.read(length) if length else b""
+    def handle_upload(self, qs):
+        """Raw streaming upload: body = file bytes, query: path=<dir>&name=<relpath>.
+
+        Poora body memory me nahi aata — 1MB chunks me seedha disk pe likha jata
+        hai, isliye bade files ke liye RAM safe aur speed zyada. Nested relpath
+        supported hai (folder drag & drop). Quota limit enforce hoti hai."""
+        rel = (qs.get("path") or [""])[0]
+        name = (qs.get("name") or [""])[0].replace(chr(92), "/").strip("/")
+        parts = Path(name).parts
+        if not name or name.startswith("/") or ".." in parts:
+            return self.send_json({"error": "invalid name"}, 400)
         try:
-            fields, files = parse_multipart(body, ctype)
-        except Exception as e:
-            return self.send_json({"error": f"parse failed: {e}"}, 400)
-        if not files:
-            return self.send_json({"error": "no file"}, 400)
-        rel = fields.get("path", "")
-        try:
-            dest_dir = safe_join(DATA_DIR, rel)
+            dest = safe_join(DATA_DIR, f"{rel}/{name}" if rel else name)
         except ValueError:
             return self.send_json({"error": "invalid path"}, 400)
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        saved = []
-        for _, filename, data in files:
-            if not filename:
-                continue
-            safe_name = Path(filename).name  # strip any path from filename
-            if not safe_name or safe_name in (".", ".."):
-                continue
-            dest = dest_dir / safe_name
-            # avoid overwrite: name (1).ext
-            if dest.exists():
-                stem, suffix = dest.stem, dest.suffix
-                i = 1
-                while dest.exists():
-                    dest = dest_dir / f"{stem} ({i}){suffix}"
-                    i += 1
-            with open(dest, "wb") as f:
-                f.write(data)
-            saved.append(safe_name)
-        self.send_json({"ok": True, "saved": saved})
+        if dest == DATA_DIR.resolve():
+            return self.send_json({"error": "invalid name"}, 400)
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            length = 0
+        limit = quota_limit()
+        used = used_bytes_cached()
+        if used >= limit:
+            self._drain(length)
+            return self.send_json({"error": "Storage full — quota khatam", "quota": limit, "used": used}, 507)
+        # duplicate naam se bachao: name (1).ext
+        if dest.exists():
+            stem, suffix = dest.stem, dest.suffix
+            i = 1
+            while dest.exists():
+                dest = dest.parent / f"{stem} ({i}){suffix}"
+                i += 1
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_name(dest.name + f".part-{secrets.token_hex(4)}")
+        written, overflow, aborted = 0, False, False
+        try:
+            with open(tmp, "wb") as f:
+                remaining = length
+                while remaining > 0:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        aborted = True
+                        break
+                    remaining -= len(chunk)
+                    written += len(chunk)
+                    if used + written > limit:
+                        overflow = True  # baaki body drain karte raho (keep-alive ke liye)
+                    else:
+                        f.write(chunk)
+        except OSError:
+            aborted = True
+        if aborted or written < length or overflow:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            usage_invalidate()
+            if aborted or written < length:
+                return  # client ne connection kaata — ab response ka koi matlab nahi
+            return self.send_json({"error": "Storage full — quota khatam", "quota": limit, "used": used}, 507)
+        os.replace(tmp, dest)
+        _usage_cache["v"] = used + written
+        _usage_cache["t"] = time.time()
+        self.send_json({"ok": True, "saved": [str(dest.relative_to(DATA_DIR.resolve()))], "bytes": written})
+
+    def _drain(self, n):
+        while n > 0:
+            chunk = self.rfile.read(min(1024 * 1024, n))
+            if not chunk:
+                break
+            n -= len(chunk)
 
     def handle_delete(self):
         data = self.read_json()
@@ -1066,6 +1190,7 @@ class Handler(BaseHTTPRequestHandler):
             shutil.rmtree(target)
         else:
             target.unlink()
+        usage_invalidate()
         self.send_json({"ok": True})
 
     def handle_mkdir(self):

@@ -141,7 +141,7 @@ pw = os.environ["PW1"]
 salt = secrets.token_bytes(16)
 dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
 cfg = {"salt": salt.hex(), "hash": dk.hex(), "port": int(os.environ["PORT"]),
-       "data": os.environ["DATA_DIR"], "version": "1.0.0"}
+       "data": os.environ["DATA_DIR"], "version": "1.4.0", "quota_gb": 10}
 with open(os.environ["CONFIG_FILE"], "w") as f:
     json.dump(cfg, f, indent=2)
 os.chmod(os.environ["CONFIG_FILE"], 0o600)
@@ -280,6 +280,9 @@ cmd_status() {
     used="$(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)"
     count="$(find "$DATA_DIR" -type f 2>/dev/null | wc -l)"
     echo "   Data: $used used • $count files • $DATA_DIR"
+    local q
+    q="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('quota_gb', 10))" "$CONFIG_FILE" 2>/dev/null || echo "?")"
+    echo "   Quota: ${q} GB  (badlo: cloud quota 25)"
   fi
   echo "   URL: http://$(public_ip):$PORT"
 }
@@ -322,6 +325,30 @@ cmd_password() {
   echo "ℹ Server restart karo taaki naya password lage: cloud restart"
 }
 
+cmd_quota() {
+  [ -f "$CONFIG_FILE" ] || { err "Install nahi hua. Pehle: cloud install"; exit 1; }
+  if [ -z "${1:-}" ]; then
+    python3 - "$CONFIG_FILE" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+q = cfg.get("quota_gb", 10)
+print(f"   Storage quota: {q:g} GB")
+print("   Badalne ke liye: cloud quota 25   (GB me)")
+PY
+  else
+    NEWQ="$1" python3 - "$CONFIG_FILE" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+cfg = json.load(open(path))
+cfg["quota_gb"] = float(os.environ["NEWQ"])
+json.dump(cfg, open(path, "w"), indent=2)
+os.chmod(path, 0o600)
+print(f"   Quota ab {cfg['quota_gb']:g} GB hai")
+PY
+    ok "Naya quota turant lagu — server restart ki zaroorat nahi"
+  fi
+}
+
 cmd_logs() {
   if has_systemd && systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     journalctl -u "$SERVICE_NAME" -f
@@ -350,9 +377,10 @@ menu() {
     echo "   6) Restart      — band karke chalu karo"
     echo "   7) Password     — password badlo"
     echo "   8) Logs         — server log dekho"
+    echo "   9) Quota        — kitna GB storage allowed"
     echo "   0) Exit"
     echo "========================================"
-    read -rp "   Option daalo (0-8): " opt
+    read -rp "   Option daalo (0-9): " opt
     case "$opt" in
       1) cmd_install ;;
       2) cmd_uninstall ;;
@@ -361,6 +389,7 @@ menu() {
       5) cmd_stop ;;
       6) cmd_restart ;;
       7) cmd_password ;;
+      9) printf "   Naya quota kitne GB? (e.g. 25): "; read -r qv; cmd_quota "$qv" ;;
       8) cmd_logs ;;
       0) echo "👋 Bye!"; exit 0 ;;
       *) err "Galat option. 0-8 me se ek daalo." ;;
@@ -379,7 +408,8 @@ case "${1:-menu}" in
   stop)       cmd_stop ;;
   restart)    cmd_restart ;;
   password)   cmd_password ;;
+  quota)      cmd_quota "${2:-}" ;;
   logs|log)   cmd_logs ;;
   menu|"")    menu ;;
-  *) echo "Usage: $0 [install|uninstall|status|start|stop|restart|password|logs]"; exit 1 ;;
+  *) echo "Usage: $0 [install|uninstall|status|start|stop|restart|password|quota|logs]"; exit 1 ;;
 esac
