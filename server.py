@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -153,6 +153,12 @@ input{font:inherit;color:var(--txt)}
 .crumbs .sep{display:inline-flex;color:var(--mut)}
 .crumbs .sep svg{width:12px;height:12px}
 mark{color:var(--acc);background:none}
+/* shared motion: ek easing curve, chhota fade+rise */
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+  transition-duration:.01ms!important}
+}
 """
 
 ICONS_CSS = """
@@ -190,6 +196,13 @@ button:hover{background:#eb7743}
 button:active{transform:scale(.985)}
 .note{color:var(--mut);font-size:12px;margin-top:20px}
 .note span{margin:0 6px}
+/* cloud mark ek baar draw hota hai — signature moment, loop nahi */
+.card .mark svg>path:first-of-type{stroke-dasharray:64;stroke-dashoffset:64;
+  animation:draw .9s var(--ease) .15s forwards}
+.card .mark svg circle,.card .mark svg>path:last-of-type{opacity:0;
+  animation:kin .4s var(--ease) .85s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes kin{to{opacity:1}}
 </style></head><body>
 <form class="card" method="POST" action="/login">
 <div class="mark">__CLOUD_MARK__</div>
@@ -280,13 +293,17 @@ body{display:flex;flex-direction:column}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}
 .item{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
-  padding:8px;cursor:pointer;position:relative;
+  padding:8px;cursor:pointer;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
   transition:border-color .12s var(--ease),background .12s var(--ease)}
+.item.enter{animation:rise .36s var(--ease) both}
 .item:hover{border-color:rgba(238,240,245,.18);background:#131722}
 .thumb{height:112px;border-radius:8px;background:var(--bg);display:flex;align-items:center;
   justify-content:center;overflow:hidden;color:var(--mut)}
 .thumb svg{width:28px;height:28px}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;
+  transition:opacity .24s var(--ease),transform .48s var(--ease)}
+.thumb img.ok{opacity:1}
+.item:hover .thumb img.ok{transform:scale(1.04)}
 .meta{padding:8px 4px 2px}
 .nm{font-size:13px;color:var(--txt);word-break:break-all;line-height:1.35;max-height:2.7em;
   overflow:hidden}
@@ -296,6 +313,7 @@ body{display:flex;flex-direction:column}
 .item:hover .acts,.item:focus-within .acts{opacity:1}
 .acts .iconbtn{width:28px;height:28px;background:rgba(11,13,20,.82);backdrop-filter:blur(4px)}
 .acts .iconbtn svg{width:14px;height:14px}
+button[data-del]:hover{color:#f2a6aa;border-color:rgba(229,72,77,.4);background:rgba(229,72,77,.12)}
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
   border-radius:var(--r-card);overflow:hidden}
 th,td{padding:0 16px;height:40px;text-align:left;font-size:13px;border-bottom:1px solid var(--line);
@@ -332,6 +350,14 @@ td.size,td.mtime{color:var(--txt2);white-space:nowrap}
 pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);padding:16px;
   border-radius:var(--r-ctl);overflow:auto;max-height:60vh;font-size:12.5px;line-height:1.55;
   width:100%;color:var(--txt2);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.tc{margin-left:auto;color:var(--mut);font-size:12px;align-self:center;font-variant-numeric:tabular-nums}
+.overlay{position:fixed;inset:16px;z-index:60;display:none;align-items:center;justify-content:center;
+  background:rgba(11,13,20,.9);border:1.5px dashed var(--acc);border-radius:20px;pointer-events:none}
+.overlay.show{display:flex;animation:ovin .18s var(--ease)}
+@keyframes ovin{from{opacity:0}to{opacity:1}}
+.ob{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--txt);font-size:16px}
+.ob .oi{color:var(--acc)}
+.ob .oi svg{width:32px;height:32px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,8px);background:var(--raise);
   border:1px solid var(--line);padding:10px 16px;border-radius:var(--r-ctl);z-index:99;font-size:13px;
   color:var(--txt);opacity:0;pointer-events:none;transition:opacity .18s var(--ease),
@@ -380,6 +406,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
     <button class="btn" id="btnMkdir2"></button>
     <button class="btn primary" id="btnUpload"></button>
     <button class="btn" id="btnZip"></button>
+    <span class="tc" id="tc"></span>
   </div>
   <div id="content"></div>
 </main>
@@ -398,6 +425,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 <div class="dh"><span class="t" id="prevTitle"></span><button class="iconbtn" data-close="previewModal" id="prevClose"></button></div>
 <div class="db" id="prevBody"></div></div></div>
 
+<div class="overlay" id="overlay"><div class="ob"><span class="oi"></span><span>Files chhodo — upload shuru ho jayega</span></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -497,7 +525,7 @@ async function load(){
   files = d.files || [];
   $("storBar").style.width = d.disk_total ? Math.min(100, (d.used_bytes / d.disk_total) * 100) + "%" : "0%";
   $("storTxt").textContent = (d.used || "0 B") + " · " + (d.count || 0) + " files";
-  renderCrumbs(); markNav(); render();
+  renderCrumbs(); markNav(); render(true);
 }
 function renderCrumbs(){
   const parts = curPath ? curPath.split("/").filter(Boolean) : [];
@@ -527,8 +555,9 @@ function visible(){
   if (q) v = v.filter(f => f.name.toLowerCase().includes(q));
   return v;
 }
-function render(){
+function render(animate){
   const v = visible(), c = $("content");
+  $("tc").textContent = v.length ? v.length + (v.length === 1 ? " item" : " items") : "";
   $("viewBtn").innerHTML = ic(view === "grid" ? "list" : "grid");
   if (!v.length){
     c.innerHTML = `<div class="empty fadein">${ic("folderOpen")}
@@ -537,12 +566,14 @@ function render(){
     return;
   }
   if (view === "grid"){
-    c.innerHTML = `<div class="grid fadein">` + v.map(f => {
+    c.innerHTML = `<div class="grid">` + v.map((f, i) => {
       const p = esc(f.path), n = esc(f.name);
-      const thumb = (!f.is_dir && IMG_EXTS.includes(extOf(f.name)))
-        ? `<img loading="lazy" src="/api/download?path=${encodeURIComponent(f.path)}&inline=1" alt="">`
+      const isImg = !f.is_dir && IMG_EXTS.includes(extOf(f.name));
+      const thumb = isImg
+        ? `<img loading="lazy" onload="this.classList.add('ok')" src="/api/download?path=${encodeURIComponent(f.path)}&inline=1" alt="">`
         : ic(iconFor(f));
-      return `<div class="item" tabindex="0" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">
+      const anim = animate ? ` enter" style="animation-delay:${Math.min(i * 24, 264)}ms` : "";
+      return `<div class="item${anim}" tabindex="0" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">
         <div class="acts">
           ${f.is_dir ? "" : `<button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button>`}
           <button class="iconbtn" title="Rename" data-rn="${p}" data-name="${n}">${ic("pencil")}</button>
@@ -553,7 +584,7 @@ function render(){
       </div>`;
     }).join("") + `</div>`;
   } else {
-    c.innerHTML = `<table class="fadein"><thead><tr><th>Naam</th><th style="width:110px">Size</th><th style="width:150px">Modified</th><th style="width:124px"></th></tr></thead><tbody>` +
+    c.innerHTML = `<table class="${animate ? "fadein" : ""}"><thead><tr><th>Naam</th><th style="width:110px">Size</th><th style="width:150px">Modified</th><th style="width:124px"></th></tr></thead><tbody>` +
       v.map(f => {
         const p = esc(f.path), n = esc(f.name);
         return `<tr>
@@ -651,8 +682,8 @@ $("content").addEventListener("keydown", e => {
   e.preventDefault();
   if (el.dataset.dir === "1") go(el.dataset.open); else preview(el.dataset.open, el.dataset.name);
 });
-$("q").addEventListener("input", render);
-$("viewBtn").addEventListener("click", () => { view = view === "grid" ? "list" : "grid"; render(); });
+$("q").addEventListener("input", () => render(false));
+$("viewBtn").addEventListener("click", () => { view = view === "grid" ? "list" : "grid"; render(true); });
 $("btnMkdir").addEventListener("click", () => openModal("mkdirModal"));
 $("btnMkdir2").addEventListener("click", () => openModal("mkdirModal"));
 $("btnUpload").addEventListener("click", () => $("fileInput").click());
@@ -667,10 +698,25 @@ document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click
 document.querySelectorAll(".modal").forEach(m => m.addEventListener("mousedown", e => { if (e.target === m) closeModal(m.id); }));
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".modal.open").forEach(m => closeModal(m.id)); });
 
-const drop = $("drop"), main = document.querySelector(".main");
-["dragover","dragenter"].forEach(ev => main.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
-["dragleave","drop"].forEach(ev => main.addEventListener(ev, e => { if (e.target === main || ev === "drop"){ e.preventDefault(); if (ev === "dragleave" && e.relatedTarget && main.contains(e.relatedTarget)) return; drop.classList.remove("over"); } }));
-main.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadFiles(e.dataTransfer.files); });
+const overlay = $("overlay");
+overlay.querySelector(".oi").innerHTML = ic("upload");
+let dragN = 0;
+const dragIsFiles = e => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes("Files");
+window.addEventListener("dragenter", e => {
+  if (!dragIsFiles(e)) return;
+  e.preventDefault(); dragN++; overlay.classList.add("show");
+});
+window.addEventListener("dragover", e => { if (overlay.classList.contains("show")) e.preventDefault(); });
+window.addEventListener("dragleave", () => {
+  if (!overlay.classList.contains("show")) return;
+  dragN = Math.max(0, dragN - 1);
+  if (dragN === 0) overlay.classList.remove("show");
+});
+window.addEventListener("drop", e => {
+  if (!overlay.classList.contains("show")) return;
+  e.preventDefault(); dragN = 0; overlay.classList.remove("show");
+  uploadFiles(e.dataTransfer.files);
+});
 
 buildNav();
 load();
