@@ -73,6 +73,8 @@ Direct commands bhi chalenge:
 ./cloud stop         # band karo
 ./cloud restart      # restart
 ./cloud password     # password badlo
+./cloud quota        # kitna GB storage allowed hai dekho
+./cloud quota 25     # quota 25 GB karo
 ./cloud logs         # log dekho
 ./cloud uninstall    # sab hata do (files rakhne ka option dega)
 ```
@@ -90,12 +92,12 @@ UI ko [unslop](https://github.com/heydamir/unslop) method (by [@heydamir](https:
 | 🔒 **Password protected** | Enter karte hi password puchega. Galat password = access nahi. |
 | 🔐 **Safe hashing** | Password plain text me nahi rakha jata — PBKDF2 hashed (600 perms config). |
 | 🛡 **Brute-force protection** | 10 galat try ke baad 60 sec lockout. |
-| 📤 **Upload** | Drag & drop ya button — multiple files ek saath. |
+| 📤 **Upload** | Files **ya poora folder** drag & drop — parallel uploads, live speed + ETA wala upload tray. |
 | ⬇️ **Download** | Single file ya poora folder ZIP me. |
 | 🖼 **Preview** | Photo, video, audio, PDF, text — browser me hi dekho. |
 | 📁 **Folders** | Naya folder banao, andar ghuso, rename, delete. |
 | 🔍 **Search + Filters** | Photos / Videos / Music / Documents alag se dekho. |
-| 💾 **Storage meter** | Kitna space use hua, sidebar me dikhega. |
+| 💾 **Storage quota + graph** | Default 10 GB limit (`cloud quota 25` se badlo). Ring graph me kitna use hua dikhta hai, full hone pe upload ruk jata hai. |
 | 🐳 **No Docker** | Sirf Python 3 stdlib — koi pip package nahi, koi dependency nahi. |
 | 🔁 **Auto-start** | systemd wale VPS pe boot pe khud start hota hai. |
 
