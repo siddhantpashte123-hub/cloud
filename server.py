@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -237,7 +237,7 @@ button:active{transform:scale(.985)}
 <form class="card" method="POST" action="/login">
 <div class="mark">__CLOUD_MARK__</div>
 <h1>BlueCloud</h1>
-<div class="sub">Private storage — sirf aapke liye</div>
+<div class="sub">Private storage — only yours</div>
 %%ERR%%
 <input type="password" name="password" placeholder="Password" required autofocus autocomplete="current-password">
 <button type="submit">Unlock</button>
@@ -464,7 +464,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 <main class="main">
   <div class="crumbs" id="crumbs"></div>
   <div class="chips" id="chips"></div>
-  <div class="drop" id="drop"><i class="ico" id="ic-drop"></i><span class="grow" id="dropTxt">Files ya folder yahan drop karo</span></div>
+  <div class="drop" id="drop"><i class="ico" id="ic-drop"></i><span class="grow" id="dropTxt">Drop files or a folder here</span></div>
   <div class="toolbar">
     <button class="btn" id="btnMkdir2"></button>
     <button class="btn primary" id="btnUpload"></button>
@@ -478,12 +478,17 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
 <input type="file" id="dirInput" webkitdirectory hidden>
 
 <div class="modal" id="mkdirModal"><div class="dlg"><h3 id="tMkdir">New folder</h3>
-<input id="folderName" placeholder="Folder ka naam" autocomplete="off">
+<input id="folderName" placeholder="Folder name" autocomplete="off">
 <div class="row"><button class="btn" data-close="mkdirModal">Cancel</button><button class="btn primary" id="btnMkdirGo">Create</button></div></div></div>
 
 <div class="modal" id="renameModal"><div class="dlg"><h3>Rename</h3>
 <input id="renameInput" autocomplete="off">
 <div class="row"><button class="btn" data-close="renameModal">Cancel</button><button class="btn primary" id="btnRenameGo">Rename</button></div></div></div>
+
+<div class="modal" id="shareModal"><div class="dlg"><h3>Share link</h3>
+<input id="shareUrl" readonly onclick="this.select()">
+<div class="row"><button class="btn" id="btnRevokeShare">Revoke</button><button class="btn" data-close="shareModal">Done</button><button class="btn primary" id="btnCopyShare">Copy link</button></div>
+<div class="sub2" style="margin-top:12px">Anyone with this link can download the file — no password needed.</div></div></div>
 
 <div class="modal" id="previewModal"><div class="dlg wide">
 <div class="dh"><span class="t" id="prevTitle"></span><button class="iconbtn" data-close="previewModal" id="prevClose"></button></div>
@@ -494,7 +499,7 @@ pre.txt{text-align:left;background:var(--bg0);border:1px solid var(--line);paddi
   <div class="tfiles" id="trayFiles"></div>
 </div>
 
-<div class="overlay" id="overlay"><div class="ob"><span class="oi"></span><span>Files chhodo — upload shuru ho jayega</span></div></div>
+<div class="overlay" id="overlay"><div class="ob"><span class="oi"></span><span>Drop to upload</span></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -520,6 +525,7 @@ const P = {
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   chev:'<path d="m9 18 6-6-6-6"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   drive:'<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
@@ -659,8 +665,8 @@ function render(animate){
   $("viewBtn").innerHTML = ic(view === "grid" ? "list" : "grid");
   if (!v.length){
     c.innerHTML = `<div class="empty fadein">${ic("folderOpen")}
-      <div class="t">Yahan kuch nahi hai</div>
-      <div class="s">Files drop karo ya Upload dabao</div></div>`;
+      <div class="t">Nothing here yet</div>
+      <div class="s">Drop files here or click Upload</div></div>`;
     return;
   }
   if (view === "grid"){
@@ -674,7 +680,7 @@ function render(animate){
       const anim = animate ? ` enter" style="animation-delay:${Math.min(i * 24, 264)}ms` : "";
       return `<div class="item${anim}" tabindex="0" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">
         <div class="acts">
-          ${f.is_dir ? "" : `<button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button>`}
+          ${f.is_dir ? "" : `<button class="iconbtn" title="Share" data-sh="${p}">${ic("link")}</button><button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button>`}
           <button class="iconbtn" title="Rename" data-rn="${p}" data-name="${n}">${ic("pencil")}</button>
           <button class="iconbtn" title="Delete" data-del="${p}" data-name="${n}">${ic("trash")}</button>
         </div>
@@ -690,7 +696,7 @@ function render(animate){
           <td><span class="rowic">${f.is_dir ? `<i class="fic">${ic("folder")}</i>` : badgeFor(f).small}</span><a href="#" class="nm2" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">${n}</a></td>
           <td class="size">${f.is_dir ? "—" : fmt(f.size)}</td><td class="mtime">${f.mtime}</td>
           <td style="white-space:nowrap;text-align:right">
-            ${f.is_dir ? "" : `<button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button> `}
+            ${f.is_dir ? "" : `<button class="iconbtn" title="Share" data-sh="${p}">${ic("link")}</button> <button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button> `}
             <button class="iconbtn" title="Rename" data-rn="${p}" data-name="${n}">${ic("pencil")}</button>
             <button class="iconbtn" title="Delete" data-del="${p}" data-name="${n}">${ic("trash")}</button>
           </td></tr>`;
@@ -700,22 +706,32 @@ function render(animate){
 
 /* ------- actions ------- */
 function dl(p){ location.href = "/api/download?path=" + encodeURIComponent(p); }
+let sharePathNow = "";
+async function shareFile(p){
+  const r = await fetch("/api/share", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:p})});
+  let d = null;
+  try { d = await r.json(); } catch(_){}
+  if (!r.ok || !d || !d.url){ toast("Couldn't create share link", true); return; }
+  sharePathNow = p;
+  $("shareUrl").value = location.origin + d.url;
+  openModal("shareModal");
+}
 function askRename(p, n){ renameTarget = p; $("renameInput").value = n; openModal("renameModal"); }
 async function del(p, n){
-  if (!confirm(`"${n}" delete karna hai? Ye wapas nahi aayega.`)) return;
+  if (!confirm(`Delete "${n}"? This cannot be undone.`)) return;
   const r = await fetch("/api/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:p})});
-  toast(r.ok ? "Delete ho gaya" : "Delete nahi hua", !r.ok); load();
+  toast(r.ok ? "Deleted" : "Delete failed", !r.ok); load();
 }
 async function doRename(){
   const name = $("renameInput").value.trim(); if (!name) return;
   const r = await fetch("/api/rename", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:renameTarget, name})});
-  closeModal("renameModal"); toast(r.ok ? "Rename ho gaya" : "Rename nahi hua", !r.ok); load();
+  closeModal("renameModal"); toast(r.ok ? "Renamed" : "Rename failed", !r.ok); load();
 }
 async function mkdir(){
   const name = $("folderName").value.trim(); if (!name) return;
   const r = await fetch("/api/mkdir", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:curPath, name})});
   closeModal("mkdirModal"); $("folderName").value = "";
-  toast(r.ok ? "Folder ban gaya" : "Folder nahi bana", !r.ok); load();
+  toast(r.ok ? "Folder created" : "Create failed", !r.ok); load();
 }
 async function preview(p, n){
   const e = extOf(n), u = "/api/download?path=" + encodeURIComponent(p) + "&inline=1";
@@ -729,7 +745,7 @@ async function preview(p, n){
     const r = await fetch(u);
     h = `<pre class="txt">${esc((await r.text()).slice(0, 40000))}</pre>`;
   }
-  else h = `<div class="empty">${ic("file")}<div class="t">Preview nahi hai</div><div class="s"><a href="${u.replace("&inline=1","")}" style="color:var(--acc)">Download karo</a></div></div>`;
+  else h = `<div class="empty">${ic("file")}<div class="t">No preview for this file</div><div class="s"><a href="${u.replace("&inline=1","")}" style="color:var(--acc)">Download</a></div></div>`;
   $("prevBody").innerHTML = h;
   openModal("previewModal");
 }
@@ -786,10 +802,10 @@ function uploadFiles(entries){
   }, 400);
   function finish(){
     clearInterval(tick);
-    ttitle.textContent = failed ? "Upload — kuch fail hue" : "Upload complete";
-    tstat.textContent = `${done} ho gayi` + (failed ? ` · ${failed} fail` : "");
+    ttitle.textContent = failed ? "Upload — some failed" : "Upload complete";
+    tstat.textContent = `${done} done` + (failed ? ` · ${failed} failed` : "");
     $("fileInput").value = ""; $("dirInput").value = "";
-    toast(failed ? `${failed} file(s) fail` : (entries.length > 1 ? entries.length + " files upload ho gayi" : "File upload ho gayi"), !!failed);
+    toast(failed ? `${failed} failed` : (entries.length > 1 ? entries.length + " files uploaded" : "File uploaded"), !!failed);
     load();
     setTimeout(() => tray.classList.remove("show"), 1400);
   }
@@ -824,12 +840,19 @@ $("content").addEventListener("dblclick", e => {
   if (el.dataset.dir === "1") go(p); else preview(p, el.dataset.name);
 });
 $("content").addEventListener("click", e => {
-  const a = e.target.closest("a[data-open]");
-  if (a){ e.preventDefault(); if (a.dataset.dir === "1") go(a.dataset.open); else preview(a.dataset.open, a.dataset.name); return; }
-  const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.dl){ dl(b.dataset.dl); }
-  else if (b.dataset.rn){ askRename(b.dataset.rn, b.dataset.name); }
-  else if (b.dataset.del){ del(b.dataset.del, b.dataset.name); }
+  const b = e.target.closest("button");
+  if (b){
+    if (b.dataset.dl){ dl(b.dataset.dl); }
+    else if (b.dataset.rn){ askRename(b.dataset.rn, b.dataset.name); }
+    else if (b.dataset.del){ del(b.dataset.del, b.dataset.name); }
+    else if (b.dataset.sh){ shareFile(b.dataset.sh); }
+    return;
+  }
+  // single click/tap: photo ya file ka preview kholo, folder me ghuso
+  const el = e.target.closest("[data-open]");
+  if (!el) return;
+  e.preventDefault();
+  if (el.dataset.dir === "1") go(el.dataset.open); else preview(el.dataset.open, el.dataset.name);
 });
 $("content").addEventListener("keydown", e => {
   if (e.key !== "Enter") return;
@@ -849,6 +872,16 @@ $("fileInput").addEventListener("change", e => uploadFiles(normEntries(e.target.
 $("dirInput").addEventListener("change", e => uploadFiles(normEntries(e.target.files)));
 $("btnMkdirGo").addEventListener("click", mkdir);
 $("btnRenameGo").addEventListener("click", doRename);
+$("btnCopyShare").addEventListener("click", async () => {
+  const inp = $("shareUrl");
+  try { await navigator.clipboard.writeText(inp.value); }
+  catch(_) { inp.select(); document.execCommand("copy"); }
+  toast("Share link copied");
+});
+$("btnRevokeShare").addEventListener("click", async () => {
+  await fetch("/api/unshare", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:sharePathNow})});
+  closeModal("shareModal"); toast("Share link removed"); load();
+});
 $("folderName").addEventListener("keydown", e => { if (e.key === "Enter") mkdir(); });
 $("renameInput").addEventListener("keydown", e => { if (e.key === "Enter") doRename(); });
 document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => closeModal(b.dataset.close)));
@@ -972,6 +1005,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "version": VERSION})
             return
 
+        if path.startswith("/s/"):   # public share link — login nahi chahiye
+            self.handle_share_download(path[3:])
+            return
+
         if path.startswith("/api/"):
             if not self.require_auth():
                 return
@@ -1016,6 +1053,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.handle_mkdir()
             elif path == "/api/rename":
                 self.handle_rename()
+            elif path == "/api/share":
+                self.handle_share()
+            elif path == "/api/unshare":
+                self.handle_unshare()
             else:
                 self.send_json({"error": "not found"}, 404)
             return
@@ -1028,14 +1069,14 @@ class Handler(BaseHTTPRequestHandler):
         now = time.time()
         count, last = login_attempts.get(ip, (0, 0))
         if count >= 10 and now - last < 60:
-            self.send_html(LOGIN_HTML.replace("%%ERR%%", '<div class="err">Bahut zyada galat tries — 60 seconds ruko, phir try karo.</div>'), 429)
+            self.send_html(LOGIN_HTML.replace("%%ERR%%", '<div class="err">Too many wrong attempts — wait 60 seconds, then try again.</div>'), 429)
             return
         body = self.read_body().decode("utf-8", "replace")
         form = urllib.parse.parse_qs(body)
         password = (form.get("password") or [""])[0]
         cfg = load_config()
         if cfg is None:
-            self.send_html(LOGIN_HTML.replace("%%ERR%%", '<div class="err">Server setup nahi hua — pehle <b>cloud install</b> chalao.</div>'), 500)
+            self.send_html(LOGIN_HTML.replace("%%ERR%%", '<div class="err">Server is not set up yet — run <b>cloud install</b> first.</div>'), 500)
             return
         if verify_password(password, cfg):
             login_attempts.pop(ip, None)
@@ -1049,7 +1090,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             login_attempts[ip] = (count + 1, now)
             time.sleep(1)  # slow down brute force
-            self.send_html(LOGIN_HTML.replace("%%ERR%%", '<div class="err">Galat password — dobara try karo.</div>'), 401)
+            self.send_html(LOGIN_HTML.replace("%%ERR%%", '<div class="err">Wrong password — try again.</div>'), 401)
 
     # ---- files
     def handle_files(self, qs):
@@ -1061,6 +1102,8 @@ class Handler(BaseHTTPRequestHandler):
         if not target.exists() or not target.is_dir():
             return self.send_json({"error": "not found"}, 404)
         items = []
+        _cfg = load_config() or {}
+        shared_paths = {sh.get("path"): t for t, sh in (_cfg.get("shares") or {}).items()}
         try:
             entries = sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
         except OSError as e:
@@ -1068,12 +1111,14 @@ class Handler(BaseHTTPRequestHandler):
         for e in entries:
             try:
                 st = e.stat()
+                relp = str(e.relative_to(DATA_DIR.resolve())) if e != DATA_DIR.resolve() else ""
                 items.append({
                     "name": e.name,
-                    "path": str(e.relative_to(DATA_DIR.resolve())) if e != DATA_DIR.resolve() else "",
+                    "path": relp,
                     "is_dir": e.is_dir(),
                     "size": st.st_size if e.is_file() else 0,
                     "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+                    "shared": shared_paths.get(relp),
                 })
             except OSError:
                 continue
@@ -1265,6 +1310,70 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "already exists"}, 409)
         target.rename(dest)
         self.send_json({"ok": True})
+
+    # ---- share links
+    def handle_share(self):
+        data = self.read_json()
+        rel = data.get("path", "")
+        if not rel:
+            return self.send_json({"error": "path required"}, 400)
+        try:
+            target = safe_join(DATA_DIR, rel)
+        except ValueError:
+            return self.send_json({"error": "invalid path"}, 400)
+        if not target.exists() or not target.is_file():
+            return self.send_json({"error": "not found"}, 404)
+        cfg = load_config() or {}
+        shares = cfg.setdefault("shares", {})
+        for tok, sh in shares.items():          # same file ka purana link wapas do
+            if sh.get("path") == rel:
+                return self.send_json({"ok": True, "token": tok, "url": f"/s/{tok}"})
+        tok = secrets.token_urlsafe(8)
+        shares[tok] = {"path": rel, "created": int(time.time())}
+        save_config(cfg)
+        self.send_json({"ok": True, "token": tok, "url": f"/s/{tok}"})
+
+    def handle_unshare(self):
+        data = self.read_json()
+        rel = data.get("path", "")
+        cfg = load_config() or {}
+        shares = cfg.get("shares") or {}
+        gone = [t for t, sh in shares.items() if sh.get("path") == rel]
+        for t in gone:
+            shares.pop(t, None)
+        cfg["shares"] = shares
+        save_config(cfg)
+        self.send_json({"ok": True, "revoked": len(gone)})
+
+    def handle_share_download(self, tok):
+        cfg = load_config() or {}
+        sh = (cfg.get("shares") or {}).get(tok)
+        if not sh:  # public page — chhota sa saaf error
+            body = ("<!DOCTYPE html><meta charset=utf-8><body style='font-family:sans-serif;"
+                    "background:#0b0d14;color:#eef0f5;display:flex;min-height:100vh;align-items:center;"
+                    "justify-content:center'><div style='text-align:center'><h1 style='font-weight:500'>"
+                    "Link invalid or revoked</h1><p style='color:#a3a9b8'>This share link no longer works.</p>")
+            return self.send_html(body, 404)
+        try:
+            target = safe_join(DATA_DIR, sh.get("path", ""))
+        except ValueError:
+            return self.send_json({"error": "invalid path"}, 400)
+        if not target.exists() or not target.is_file():
+            body = ("<!DOCTYPE html><meta charset=utf-8><body style='font-family:sans-serif;"
+                    "background:#0b0d14;color:#eef0f5;display:flex;min-height:100vh;align-items:center;"
+                    "justify-content:center'><div style='text-align:center'><h1 style='font-weight:500'>"
+                    "File no longer available</h1><p style='color:#a3a9b8'>It was moved or deleted.</p>")
+            return self.send_html(body, 404)
+        ctype, _ = mimetypes.guess_type(str(target))
+        size = target.stat().st_size   # seedha download — koi preview nahi
+        self.send_response(200)
+        self.send_header("Content-Type", ctype or "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        with open(target, "rb") as f:
+            shutil.copyfileobj(f, self.wfile, length=1024 * 1024)
 
 
 def main():
