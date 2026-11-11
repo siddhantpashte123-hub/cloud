@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -106,11 +106,17 @@ def dir_stats(base: Path):
 
 
 def quota_limit():
-    """Storage limit (bytes) — config.json me 'quota_gb' se, default 10 GB."""
+    """Storage limit (bytes). config.json me 'quota_gb' set ho to wahi limit;
+    warna default = data folder jis disk pe hai uska poora size."""
     cfg = load_config() or {}
+    if "quota_gb" in cfg:
+        try:
+            return max(1, int(float(cfg["quota_gb"]) * (1024 ** 3)))
+        except (TypeError, ValueError):
+            pass
     try:
-        return max(1, int(float(cfg.get("quota_gb", 10)) * (1024 ** 3)))
-    except (TypeError, ValueError):
+        return shutil.disk_usage(str(DATA_DIR)).total
+    except OSError:
         return 10 * (1024 ** 3)
 
 
@@ -328,6 +334,13 @@ body{display:flex;flex-direction:column}
 .thumb{height:112px;border-radius:8px;background:var(--bg);display:flex;align-items:center;
   justify-content:center;overflow:hidden;color:var(--mut)}
 .thumb svg{width:28px;height:28px;transition:transform .24s var(--ease),color .24s var(--ease)}
+.fbadge{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:32px;
+  padding:0 8px;border-radius:8px;font-size:12px;font-weight:600;letter-spacing:.03em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  transition:transform .24s var(--ease)}
+.item:hover .fbadge{transform:translateY(-2px)}
+.fbadge.sm{min-width:0;height:20px;padding:0 5px;font-size:9.5px;border-radius:4px;margin-right:8px}
+.thumb .fic{color:var(--acc);opacity:.85}
 .item:hover .thumb svg{transform:translateY(-2px);color:var(--txt2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;
   transition:opacity .24s var(--ease),transform .48s var(--ease)}
@@ -517,15 +530,40 @@ const DOC_EXTS = ["pdf","txt","md","doc","docx","ppt","pptx","xls","xlsx","csv"]
 const TXT_EXTS = ["txt","md","py","js","ts","html","css","json","log","xml","yml","yaml","sh","csv"];
 const ZIP_EXTS = ["zip","rar","tar","gz","7z","bz2"];
 const extOf = n => n.includes(".") ? n.split(".").pop().toLowerCase() : "";
-function iconFor(f){
-  if (f.is_dir) return "folder";
+function iconFor(f){ return f.is_dir ? "folder" : "file"; }
+/* har file type ka apna colored badge (Drive jaisa) */
+const TYPE_STYLE = {
+  html:["#e8622d","#fff","HTML"], htm:["#e8622d","#fff","HTML"],
+  css:["#2965f1","#fff","CSS"],
+  js:["#f0db4f","#1b1b1b","JS"], mjs:["#f0db4f","#1b1b1b","JS"], ts:["#3178c6","#fff","TS"],
+  py:["#3776ab","#fff","PY"], ipynb:["#e8870d","#fff","PY"],
+  json:["#6e7b8b","#fff","JSON"], xml:["#8a93a3","#fff","XML"], yml:["#8a93a3","#fff","YML"], yaml:["#8a93a3","#fff","YAML"],
+  md:["#4f83cc","#fff","MD"], txt:["#8a93a3","#fff","TXT"], log:["#8a93a3","#fff","LOG"], csv:["#3f9d6e","#fff","CSV"],
+  sh:["#3f3f46","#fff","SH"], env:["#3f3f46","#fff","ENV"],
+  pdf:["#e5484d","#fff","PDF"],
+  doc:["#3a7bd5","#fff","DOC"], docx:["#3a7bd5","#fff","DOC"],
+  ppt:["#d24726","#fff","PPT"], pptx:["#d24726","#fff","PPT"],
+  xls:["#1f9d55","#fff","XLS"], xlsx:["#1f9d55","#fff","XLS"],
+  zip:["#9768d1","#fff","ZIP"], rar:["#9768d1","#fff","RAR"], tar:["#9768d1","#fff","TAR"],
+  gz:["#9768d1","#fff","GZ"], "7z":["#9768d1","#fff","7Z"], bz2:["#9768d1","#fff","BZ2"],
+  exe:["#5b9dff","#0a1424","EXE"], msi:["#5b9dff","#0a1424","MSI"], apk:["#3ddc84","#0a1424","APK"],
+  dmg:["#9aa7b8","#0a1424","DMG"], deb:["#d70a53","#fff","DEB"], rpm:["#d70a53","#fff","RPM"],
+  mp4:["#e2597f","#fff","MP4"], mkv:["#e2597f","#fff","MKV"], webm:["#e2597f","#fff","WEBM"],
+  mov:["#e2597f","#fff","MOV"], m4v:["#e2597f","#fff","M4V"], avi:["#e2597f","#fff","AVI"],
+  mp3:["#4cc38a","#0a1424","MP3"], wav:["#4cc38a","#0a1424","WAV"], ogg:["#4cc38a","#0a1424","OGG"],
+  flac:["#4cc38a","#0a1424","FLAC"], m4a:["#4cc38a","#0a1424","M4A"],
+  sql:["#e4b33c","#1b1b1b","SQL"], db:["#e4b33c","#1b1b1b","DB"],
+  php:["#777bb3","#fff","PHP"], java:["#e76f00","#fff","JAVA"], c:["#5c8dbc","#fff","C"],
+  cpp:["#5c8dbc","#fff","CPP"], h:["#5c8dbc","#fff","H"], rs:["#dea584","#1b1b1b","RS"],
+  go:["#00acd7","#fff","GO"], rb:["#cc342d","#fff","RB"], lock:["#8a93a3","#fff","LOCK"]
+};
+function badgeFor(f){
   const e = extOf(f.name);
-  if (IMG_EXTS.includes(e)) return "image";
-  if (VID_EXTS.includes(e)) return "film";
-  if (AUD_EXTS.includes(e)) return "music";
-  if (ZIP_EXTS.includes(e)) return "archive";
-  if (DOC_EXTS.includes(e) || TXT_EXTS.includes(e)) return "fileText";
-  return "file";
+  const st = TYPE_STYLE[e];
+  const label = st ? st[2] : (e ? e.slice(0, 4).toUpperCase() : "FILE");
+  const bg = st ? st[0] : "#2a3040", fg = st ? st[1] : "#aab2c0";
+  return {html: `<span class="fbadge" style="background:${bg};color:${fg}">${label}</span>`,
+          small: `<span class="fbadge sm" style="background:${bg};color:${fg}">${label}</span>`};
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function fmt(n){if(n<1024)return n+" B";for(const u of["KB","MB","GB","TB"]){n/=1024;if(n<1024||u==="TB")return n.toFixed(1)+" "+u}return n+" B"}
@@ -628,10 +666,11 @@ function render(animate){
   if (view === "grid"){
     c.innerHTML = `<div class="grid">` + v.map((f, i) => {
       const p = esc(f.path), n = esc(f.name);
-      const isImg = !f.is_dir && IMG_EXTS.includes(extOf(f.name));
+      const e = extOf(f.name);
+      const isImg = !f.is_dir && IMG_EXTS.includes(e);
       const thumb = isImg
         ? `<img loading="lazy" onload="this.classList.add('ok')" src="/api/download?path=${encodeURIComponent(f.path)}&inline=1" alt="">`
-        : ic(iconFor(f));
+        : f.is_dir ? `<i class="fic">${ic("folder")}</i>` : badgeFor(f).html;
       const anim = animate ? ` enter" style="animation-delay:${Math.min(i * 24, 264)}ms` : "";
       return `<div class="item${anim}" tabindex="0" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">
         <div class="acts">
@@ -648,7 +687,7 @@ function render(animate){
       v.map(f => {
         const p = esc(f.path), n = esc(f.name);
         return `<tr>
-          <td><span class="rowic">${ic(iconFor(f))}</span><a href="#" class="nm2" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">${n}</a></td>
+          <td><span class="rowic">${f.is_dir ? `<i class="fic">${ic("folder")}</i>` : badgeFor(f).small}</span><a href="#" class="nm2" data-open="${p}" data-dir="${f.is_dir ? 1 : 0}" data-name="${n}">${n}</a></td>
           <td class="size">${f.is_dir ? "—" : fmt(f.size)}</td><td class="mtime">${f.mtime}</td>
           <td style="white-space:nowrap;text-align:right">
             ${f.is_dir ? "" : `<button class="iconbtn" title="Download" data-dl="${p}">${ic("download")}</button> `}
