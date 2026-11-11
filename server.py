@@ -23,7 +23,7 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 DEFAULT_PORT = 1919
 SESSION_TTL = 12 * 3600  # 12 hours
 PBKDF2_ROUNDS = 200_000
@@ -350,9 +350,10 @@ body{display:flex;flex-direction:column}
 .nm{font-size:13px;color:var(--txt);word-break:break-all;line-height:1.35;max-height:2.7em;
   overflow:hidden}
 .mt{font-size:12px;color:var(--mut);margin-top:2px}
-.mbtn{position:absolute;top:12px;right:12px;width:28px;height:28px;
-  background:rgba(11,13,20,.82);backdrop-filter:blur(4px)}
-.mbtn svg{width:15px;height:15px}
+.mbtn{position:absolute;top:12px;right:12px;width:30px;height:30px;
+  background:rgba(11,13,20,.88);backdrop-filter:blur(4px);color:var(--txt)}
+.mbtn svg{width:17px;height:17px}
+.mbtn:hover{color:var(--acc)}
 .pick{position:absolute;top:12px;left:12px;width:22px;height:22px;border-radius:50%;
   border:1.5px solid var(--mut);background:rgba(11,13,20,.72);display:none;
   align-items:center;justify-content:center;color:#fff;z-index:2}
@@ -572,7 +573,7 @@ const P = {
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   chev:'<path d="m9 18 6-6-6-6"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
-  more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  more:'<circle cx="12" cy="5" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.8" fill="currentColor" stroke="none"/>',
   eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   check:'<polyline points="20 6 9 17 4 12"/>',
   chevL:'<path d="m15 18-6-6 6-6"/>',
